@@ -1,0 +1,55 @@
+"""japanese-reranker-tiny-v2 によるリランキング"""
+
+import platform
+from dataclasses import dataclass
+from typing import Any
+
+from sentence_transformers import CrossEncoder
+
+MODEL_NAME = "hotchpotch/japanese-reranker-tiny-v2"
+_reranker: CrossEncoder | None = None
+
+
+def _onnx_file_name() -> str:
+    machine = platform.machine().lower()
+    if "arm" in machine or "aarch64" in machine:
+        return "onnx/model_qint8_arm64.onnx"
+    return "onnx/model_qint8_avx2.onnx"
+
+
+@dataclass
+class RerankCandidate:
+    text: str
+    source: Any
+    rerank_score: float = 0.0
+
+
+def get_reranker() -> CrossEncoder:
+    global _reranker
+    if _reranker is None:
+        _reranker = CrossEncoder(
+            MODEL_NAME,
+            backend="onnx",
+            model_kwargs={
+                "providers": ["CPUExecutionProvider"],
+                "file_name": _onnx_file_name(),
+            },
+        )
+    return _reranker
+
+
+def rerank(query: str, candidates: list[RerankCandidate], top_k: int = 10) -> list[RerankCandidate]:
+    """RRF後の候補をリランキングする。新しいリストを返す。"""
+    if not candidates:
+        return []
+
+    reranker = get_reranker()
+    pairs = [(query, c.text) for c in candidates]
+    scores = reranker.predict(pairs)
+
+    scored = [
+        RerankCandidate(text=c.text, source=c.source, rerank_score=float(s))
+        for c, s in zip(candidates, scores)
+    ]
+    scored.sort(key=lambda c: c.rerank_score, reverse=True)
+    return scored[:top_k]
