@@ -17,10 +17,11 @@ mcp = FastMCP("kakolog", host=HOST, port=PORT)
 
 
 @mcp.tool()
-def search(query: str, limit: int = 5) -> list[dict]:
+def search(query: str, limit: int = 5, use_rerank: bool = False) -> list[dict]:
     """過去のClaude Codeセッション会話を検索する。
-    キーワード+意味検索のハイブリッド。具体的なキーワードほど精度が高い。"""
-    results = do_search(query, limit=limit)
+    キーワード+意味検索のハイブリッド。具体的なキーワードほど精度が高い。
+    use_rerank=Trueでcross-encoderリランキングを有効化（精度向上、速度低下）。"""
+    results = do_search(query, limit=limit, use_rerank=use_rerank)
     return [
         {
             "question": r.question,
@@ -51,8 +52,7 @@ def stats() -> dict:
 def main():
     print("[kakolog] Loading models...", file=sys.stderr)
     get_model()
-    get_reranker()
-    print("[kakolog] Models loaded. Starting MCP server.", file=sys.stderr)
+    print("[kakolog] Model loaded. Starting MCP server.", file=sys.stderr)
 
     with connection() as conn:
         init_db(conn)

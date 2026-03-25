@@ -97,7 +97,7 @@ def search_vector(conn: sqlite3.Connection, query_embedding: list[float], limit:
 RERANK_TOP = 10
 
 
-def search(query: str, limit: int = 10, project_path: str | None = None) -> list[SearchResult]:
+def search(query: str, limit: int = 10, project_path: str | None = None, use_rerank: bool = False) -> list[SearchResult]:
     query_embedding = embed_query(query)
 
     with connection() as conn:
@@ -140,6 +140,9 @@ def search(query: str, limit: int = 10, project_path: str | None = None) -> list
         if key not in seen:
             seen.add(key)
             deduped.append(r)
+
+    if not use_rerank:
+        return deduped[:limit]
 
     # リランキング
     candidates = [
