@@ -5,7 +5,6 @@ import sys
 from mcp.server.fastmcp import FastMCP
 
 from .embedder import get_model
-from .reranker import get_reranker
 from .search import search as do_search
 from .service import save_session
 from .db import connection, init_db, get_stats

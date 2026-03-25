@@ -2,7 +2,7 @@
 
 Claude Code長期記憶エンジンの開発リポジトリ。
 
-セッション終了時に会話をチャンク分割→ベクトル化→SQLiteに保存し、ハイブリッド検索+リランキングで過去の記憶を呼び出す。このファイルはkakolog自体の開発・改善時の参照用。
+セッション終了時に会話をチャンク分割→ベクトル化→SQLiteに保存し、ハイブリッド検索で過去の記憶を呼び出す。このファイルはkakolog自体の開発・改善時の参照用。
 
 ## アーキテクチャ
 
@@ -85,7 +85,7 @@ claude mcp add -s user kakolog -- uv run --directory /path/to/kakolog kakolog-mc
 
 ## 検索パイプライン
 
-FTS5(キーワード) + sqlite-vec(ベクトル) → RRF統合(k=60, ターム一致率ブースト) × 時間減衰(30日半減期) → japanese-reranker-tiny-v2でリランキング(上位10件)
+FTS5(キーワード) + sqlite-vec(ベクトル) → RRF統合(k=60, ターム一致率ブースト) × 時間減衰(30日半減期)。`use_rerank=True`でjapanese-reranker-tiny-v2によるリランキング(上位10件)を追加可能
 
 ## Gotchas
 
