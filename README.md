@@ -9,37 +9,19 @@ Claude Codeに長期記憶を持たせるエンジン。セッション終了時
 ### 全体構成
 
 ```
-                    SessionEnd hook
-Claude Code ──────────────────────────> save-on-session-end.sh
-                                              │
-                                         curl (即座に返る)
-                                              │
-                                              v
-                                    ┌─────────────────────┐
-                                    │  kakolog-server   │
-                                    │     :7377            │
-                                    │                     │
-                                    │  ┌───────────────┐  │
-                                    │  │ Ruri v3-30m   │  │  埋め込みモデル (常駐)
-                                    │  └───────────────┘  │
-                                    │  ┌───────────────┐  │
-                                    │  │ Reranker      │  │  japanese-reranker-tiny-v2 (常駐)
-                                    │  │ (ONNX int8)   │  │
-                                    │  └───────────────┘  │
-                                    │  ┌───────────────┐  │
-                                    │  │ SQLite        │  │  memories + FTS5 + sqlite-vec
-                                    │  └───────────────┘  │
-                                    └─────────────────────┘
+[Claude Code] ──MCP (streamable-http)──> [kakolog-mcp :7377]
+                                            ├── search  (検索)
+                                            ├── save    (保存)
+                                            └── stats   (統計)
+
+[SessionEnd hook] ──Python直接実行──> [service.save_session]
 ```
 
-常駐HTTPサーバー方式を採用。モデルをメモリに保持し、SessionEndフックからは軽量なHTTPリクエストだけ送る。
+MCPサーバー（streamable-http）方式を採用。launchdで常駐起動し、モデルをメモリに保持。Claude Codeからはネイティブツールとして直接呼び出せる。
 
-- **保存 (`POST /save`)**: 202 Accepted を即返却し、バックグラウンドでチャンク分割→ベクトル化→DB保存
-- **検索 (`POST /search`)**: FTS5 + ベクトル検索 → RRF統合 → リランキング → 結果を返す
-
-### なぜ常駐サーバー?
-
-当初はSessionEndフックでPythonを直接起動していたが、PyTorch + モデルロードで毎回35秒かかった。常駐化でモデルロードは起動時1回のみとなり、保存応答は0.01秒に改善。
+- **検索 (`search`)**: FTS5 + ベクトル検索 → RRF統合 → リランキング → 結果を返す
+- **保存 (`save`)**: チャンク分割→ベクトル化→DB保存
+- **SessionEndフック**: Python直接実行で保存（MCPプロトコル不要）
 
 ## 検索パイプライン
 
@@ -186,19 +168,24 @@ uv sync
 
 ## 使い方
 
+### MCP登録
+
 ```bash
-# サーバー起動 (初回はモデルダウンロードが走る)
-uv run kakolog-server
-
-# 手動検索
-uv run kakolog search "認証エラーの対応方法"
-
-# 統計
-uv run kakolog stats
-
-# 過去セッションの一括インポート
-uv run kakolog-import
+# グローバルに登録（全プロジェクトで利用可能）
+claude mcp add -s user --transport http kakolog http://localhost:7377/mcp
 ```
+
+### CLI
+
+```bash
+uv run kakolog search "認証エラーの対応方法"   # 手動検索
+uv run kakolog stats                          # 統計
+uv run kakolog-import                         # 過去セッション一括インポート
+```
+
+### launchd自動起動 (macOS)
+
+`~/Library/LaunchAgents/com.kakolog.plist` を作成してサーバーを常駐させる。詳細は [hooks-setup.md](hooks-setup.md) を参照。
 
 ## パフォーマンス
 
@@ -207,8 +194,7 @@ uv run kakolog-import
 | 観点 | 結果 |
 |------|------|
 | 検索レスポンス (リランキング込み) | ~400ms |
-| 保存応答 (非同期受付) | ~10ms |
-| バックグラウンド保存 (25チャンク) | ~30秒 |
+| 保存 (25チャンク) | ~30秒 |
 | 全インポート (479セッション) | ~10分 |
 | 常駐メモリ | ~627MB |
 | DBサイズ | ~10MB |
@@ -217,22 +203,25 @@ uv run kakolog-import
 
 ```
 src/kakolog/
-├── server.py       # 常駐HTTPサーバー (ThreadingHTTPServer, port 7377)
+├── mcp_server.py   # MCPサーバー (FastMCP, streamable-http, port 7377)
 ├── service.py      # 保存ビジネスロジック (重複チェック+保存オーケストレーション)
-├── save.py         # SessionEndフック用クライアント
 ├── search.py       # ハイブリッド検索 (FTS5 + vec → RRF → Reranking)
 ├── reranker.py     # japanese-reranker-tiny-v2 (ONNX int8, Cross-Encoder)
 ├── db.py           # SQLite接続 (Context Manager) ・CRUD
 ├── chunker.py      # JSONL→Q&Aチャンク分割 (ノイズフィルタ+MeCab重要語判定)
 ├── embedder.py     # Ruri v3-30m (CPU, 256次元)
-├── recall.py       # 記憶呼び出し (未連携)
 ├── cli.py          # 手動検索・stats用CLI
 └── bulk_import.py  # 過去セッション一括インポート
 hooks/
-└── save-on-session-end.sh  # SessionEndフック (curlでサーバーにPOST)
+├── save-on-session-end.sh  # SessionEndフック (Python直接実行で保存)
+└── start-server.sh         # launchd用サーバー起動スクリプト
 ```
 
 ## 設計判断
+
+### MCP streamable-http + launchd常駐
+
+MCPのstdioトランスポートはセッション中は常駐するが、プロセスが死んだ場合にセッション内で自動復帰しない。streamable-httpにしてlaunchdで常駐させることで、モデルロード（~30秒）は起動時1回のみとなり、プロセス死亡時もlaunchdが自動再起動する。
 
 ### Ruri v3-30m (310mではなく30m)
 

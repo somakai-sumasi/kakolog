@@ -10,13 +10,12 @@ dependencies = [
     "optimum>=1.0",
     "onnxruntime>=1.0",
     "sentencepiece>=0.2.1",
+    "mcp[cli]>=1.0",
 ]
 
 [project.scripts]
 kakolog = "kakolog.cli:main"
-kakolog-save = "kakolog.save:main"
-kakolog-recall = "kakolog.recall:main"
-kakolog-server = "kakolog.server:main"
+kakolog-mcp = "kakolog.mcp_server:main"
 kakolog-import = "kakolog.bulk_import:main"
 
 [build-system]

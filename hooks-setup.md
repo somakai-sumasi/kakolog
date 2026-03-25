@@ -1,4 +1,4 @@
-# Hooks設定ガイド
+# セットアップガイド
 
 ## 1. インストール
 
@@ -7,7 +7,13 @@ cd /path/to/kakolog
 uv sync
 ```
 
-## 2. Claude Code Hooks設定
+## 2. MCP登録
+
+```bash
+claude mcp add -s user --transport http kakolog http://localhost:7377/mcp
+```
+
+## 3. SessionEnd Hook設定
 
 `~/.claude/settings.json` に以下を追加:
 
@@ -28,7 +34,7 @@ uv sync
 }
 ```
 
-## 3. サーバー自動起動 (macOS)
+## 4. サーバー自動起動 (macOS)
 
 `~/Library/LaunchAgents/com.kakolog.plist` を作成:
 
@@ -48,9 +54,9 @@ uv sync
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/tmp/kakolog-server.log</string>
+    <string>/tmp/kakolog-mcp.log</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/kakolog-server.log</string>
+    <string>/tmp/kakolog-mcp.log</string>
 </dict>
 </plist>
 ```
@@ -59,15 +65,15 @@ uv sync
 launchctl load ~/Library/LaunchAgents/com.kakolog.plist
 ```
 
-## 4. 動作確認
+## 5. 動作確認
 
 ```bash
-# ヘルスチェック
-curl -s http://127.0.0.1:7377/health
+# MCPサーバー稼働確認
+curl -s http://127.0.0.1:7377/mcp
 
-# ステータス確認
+# CLI検索
+uv run kakolog search "検索キーワード"
+
+# 統計
 uv run kakolog stats
-
-# 手動検索
-uv run kakolog search "検索したいキーワード"
 ```
