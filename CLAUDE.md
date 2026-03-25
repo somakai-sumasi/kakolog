@@ -78,7 +78,7 @@ rm ~/.kakolog/memory.db && uv run kakolog-import  # DB再構築
 - assistant回答結合: ツール実行を挟む複数応答を結合
 - ノイズ除去: XMLタグ、定型応答、トリビアル入力をフィルタ
 - MeCab wcost判定: 50文字未満のチャンクは`WCOST_THRESHOLD=6000`以上の名詞があれば採用
-- 重複排除: 同一Q&Aは1件のみ保存
+- 重複排除: 同一Q&A+project_pathは1件のみ保存。再出現時はcreated_atを更新（時間減衰リセット）
 
 ## 検索パイプライン
 
