@@ -3,7 +3,7 @@
 import sys
 
 from .chunker import chunk_session
-from .db import connection, init_db, insert_memory, memory_exists
+from .db import connection, init_db, insert_memory, touch_if_exists
 from .embedder import embed_documents
 
 
@@ -19,7 +19,7 @@ def save_session(session_id: str, transcript_path: str, project_path: str | None
         init_db(conn)
         count = 0
         for chunk, emb in zip(chunks, embeddings):
-            if memory_exists(conn, chunk.question, chunk.answer):
+            if touch_if_exists(conn, chunk.question, chunk.answer, project_path):
                 continue
             insert_memory(conn, session_id, chunk.question, chunk.answer, emb, project_path)
             count += 1

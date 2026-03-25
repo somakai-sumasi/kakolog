@@ -81,12 +81,20 @@ def init_db(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def memory_exists(conn: sqlite3.Connection, question: str, answer: str) -> bool:
+def touch_if_exists(conn: sqlite3.Connection, question: str, answer: str, project_path: str | None = None) -> bool:
+    """同一Q&A+project_pathが存在すればcreated_atを更新してTrueを返す。"""
     row = conn.execute(
-        "SELECT 1 FROM memories WHERE question = ? AND answer = ? LIMIT 1",
-        [question, answer],
+        "SELECT id FROM memories WHERE question = ? AND answer = ? AND project_path IS ? LIMIT 1",
+        [question, answer, project_path],
     ).fetchone()
-    return row is not None
+    if row:
+        conn.execute(
+            "UPDATE memories SET created_at = CURRENT_TIMESTAMP WHERE id = ?",
+            [row[0]],
+        )
+        conn.commit()
+        return True
+    return False
 
 
 def insert_memory(

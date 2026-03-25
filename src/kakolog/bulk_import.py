@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 
 from .chunker import chunk_session
-from .db import connection, init_db, insert_memory, memory_exists
+from .db import connection, init_db, insert_memory, touch_if_exists
 from .embedder import embed_documents, get_model
 
 
@@ -56,7 +56,7 @@ def bulk_import(claude_projects_dir: Path | None = None):
             embeddings = embed_documents(texts)
 
             for chunk, emb in zip(chunks, embeddings):
-                if not memory_exists(conn, chunk.question, chunk.answer):
+                if not touch_if_exists(conn, chunk.question, chunk.answer, project_path):
                     insert_memory(conn, session_id, chunk.question, chunk.answer, emb, project_path)
 
             total_memories += len(chunks)
