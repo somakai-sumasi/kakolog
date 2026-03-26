@@ -3,6 +3,8 @@
 import sys
 
 from mcp.server.fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from .embedder import get_model
 from .search import search as do_search
@@ -46,6 +48,16 @@ def stats() -> dict:
     with connection() as conn:
         init_db(conn)
         return get_stats(conn)
+
+
+@mcp.custom_route("/hook/save", methods=["POST"])
+async def hook_save(request: Request) -> JSONResponse:
+    """SessionEndフック専用エンドポイント。curl一発で呼べる軽量HTTP API。"""
+    data = await request.json()
+    if not data.get("session_id") or not data.get("transcript_path"):
+        return JSONResponse({"error": "session_id and transcript_path are required"}, status_code=400)
+    count = save_session(data["session_id"], data["transcript_path"], data.get("cwd"))
+    return JSONResponse({"saved": count, "session_id": data["session_id"]})
 
 
 def main():

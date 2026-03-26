@@ -10,18 +10,19 @@ Claude Codeに長期記憶を持たせるエンジン。セッション終了時
 
 ```
 [Claude Code] ──MCP (streamable-http)──> [kakolog-mcp :7377]
-                                            ├── search  (検索)
-                                            ├── save    (保存)
-                                            └── stats   (統計)
+                                            ├── search       (検索)
+                                            ├── save         (保存)
+                                            ├── stats        (統計)
+                                            └── POST /hook/save  (SessionEndフック専用)
 
-[SessionEnd hook] ──Python直接実行──> [service.save_session]
+[SessionEnd hook] ──curl──> [kakolog-mcp :7377/hook/save]
 ```
 
 MCPサーバー（streamable-http）方式を採用。launchdで常駐起動し、モデルをメモリに保持。Claude Codeからはネイティブツールとして直接呼び出せる。
 
 - **検索 (`search`)**: FTS5 + ベクトル検索 → RRF統合 → 結果を返す（`use_rerank=True`でcross-encoderリランキングも可能）
 - **保存 (`save`)**: チャンク分割→ベクトル化→DB保存
-- **SessionEndフック**: Python直接実行で保存（MCPプロトコル不要）
+- **SessionEndフック**: curlで `/hook/save` に転送。重いML importをPythonで毎回起動せずサーバーに委譲することでタイムアウトを回避
 
 ## 検索パイプライン
 
@@ -214,7 +215,7 @@ src/kakolog/
 ├── cli.py          # 手動検索・stats用CLI
 └── bulk_import.py  # 過去セッション一括インポート
 hooks/
-├── save-on-session-end.sh  # SessionEndフック (Python直接実行で保存)
+├── save-on-session-end.sh  # SessionEndフック (curlでMCPサーバーに転送)
 └── start-server.sh         # launchd用サーバー起動スクリプト
 ```
 
