@@ -6,6 +6,7 @@ from mcp.server.fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from .config import add_exclude_path, get_exclude_paths, remove_exclude_path
 from .embedder import get_model
 from .search import search as do_search
 from .service import save_session
@@ -58,6 +59,24 @@ async def hook_save(request: Request) -> JSONResponse:
         return JSONResponse({"error": "session_id and transcript_path are required"}, status_code=400)
     count = save_session(data["session_id"], data["transcript_path"], data.get("cwd"))
     return JSONResponse({"saved": count, "session_id": data["session_id"]})
+
+
+@mcp.tool()
+def exclude_list() -> list[str]:
+    """保存除外パスの一覧を返す。"""
+    return get_exclude_paths()
+
+
+@mcp.tool()
+def exclude_add(path: str) -> list[str]:
+    """指定パス（前方一致）を保存除外リストに追加する。"""
+    return add_exclude_path(path)
+
+
+@mcp.tool()
+def exclude_remove(path: str) -> list[str]:
+    """指定パスを保存除外リストから削除する。"""
+    return remove_exclude_path(path)
 
 
 def main():

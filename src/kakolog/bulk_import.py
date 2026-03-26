@@ -1,12 +1,30 @@
 """過去の全セッションを一括インポートする。"""
 
+import json
 import sys
 import time
 from pathlib import Path
 
 from .chunker import chunk_session
+from .config import is_excluded
 from .db import connection, init_db, insert_memory, touch_if_exists
 from .embedder import embed_documents, get_model
+
+
+def _extract_cwd(jsonl_path: Path) -> str | None:
+    """JSONLの最初のエントリからcwdを取得する。"""
+    try:
+        with open(jsonl_path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                entry = json.loads(line)
+                if "cwd" in entry:
+                    return entry["cwd"]
+    except Exception:
+        pass
+    return None
 
 
 def bulk_import(claude_projects_dir: Path | None = None):
@@ -37,11 +55,10 @@ def bulk_import(claude_projects_dir: Path | None = None):
             if session_id in existing:
                 continue
 
-            project_dir = jsonl_path.parent.name
-            if project_dir.startswith("-"):
-                project_path = "/" + project_dir[1:].replace("-", "/")
-            else:
-                project_path = None
+            project_path = _extract_cwd(jsonl_path)
+
+            if is_excluded(project_path):
+                continue
 
             try:
                 chunks = chunk_session(jsonl_path)
