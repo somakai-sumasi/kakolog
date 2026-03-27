@@ -7,7 +7,8 @@ from pathlib import Path
 
 from .chunker import chunk_session
 from .config import is_excluded
-from .db import connection, init_db, insert_memory, touch_if_exists
+from .db import connection, init_db
+from .repository import insert_memory, touch_if_exists
 from .embedder import embed_documents, get_model
 
 

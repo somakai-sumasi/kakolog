@@ -10,7 +10,7 @@ MCPサーバー（streamable-http）方式。launchdで常駐起動し、Claude 
 
 ```
 [Claude Code] --MCP(http:7377)--> [kakolog-mcp (launchd常駐)]
-                                      ├── search              (検索: FTS5 + vec → RRF → Reranking)
+                                      ├── search              (検索: FTS5 + vec → RRF → MMR → Reranking)
                                       ├── save                (保存: チャンク分割 → 埋め込み → DB保存)
                                       ├── stats               (統計)
                                       ├── exclude_list/add/remove  (保存除外パス管理)
@@ -36,9 +36,10 @@ MCPサーバー（streamable-http）方式。launchdで常駐起動し、Claude 
 src/kakolog/
 ├── mcp_server.py   # MCPサーバー (FastMCP, streamable-http, port 7377)
 ├── service.py      # 保存ビジネスロジック (重複チェック+保存オーケストレーション)
-├── search.py       # ハイブリッド検索 (FTS5 + vec → RRF → Reranking)
+├── search.py       # ハイブリッド検索 (FTS5 + vec → RRF → MMR → Reranking)
 ├── reranker.py     # japanese-reranker-tiny-v2 (ONNX int8, Cross-Encoder)
-├── db.py           # SQLite接続 (Context Manager) ・CRUD
+├── repository.py   # メモリのデータ操作 (CRUD)
+├── db.py           # SQLite接続 (Context Manager) ・スキーマ管理
 ├── chunker.py      # JSONL→Q&Aチャンク分割 (ノイズフィルタ+MeCab重要語判定)
 ├── embedder.py     # Ruri v3-30m (CPU, 256次元)
 ├── cli.py          # 手動検索・stats用CLI
@@ -98,7 +99,7 @@ stdioで登録するとセッション起動時にポート競合して接続失
 
 ## 検索パイプライン
 
-FTS5(キーワード) + sqlite-vec(ベクトル) → RRF統合(k=60, ターム一致率ブースト) × 時間減衰(30日半減期)。`use_rerank=True`でjapanese-reranker-tiny-v2によるリランキング(上位10件)を追加可能
+FTS5(キーワード) + sqlite-vec(ベクトル) → RRF統合(k=60, ターム一致率ブースト) × 時間減衰(30日半減期) → MMR多様性選択(λ=0.7, デフォルト有効)。`use_rerank=True`でjapanese-reranker-tiny-v2によるリランキング(上位10件)を追加可能
 
 ## Gotchas
 
