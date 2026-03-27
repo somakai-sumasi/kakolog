@@ -1,20 +1,24 @@
-"""ハイブリッド検索: FTS5キーワード + vecベクトル → RRF統合 × 時間減衰"""
+"""ハイブリッド検索: FTS5キーワード + vecベクトル → RRF統合 × 時間減衰 → MMR多様性"""
 
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
 
+import numpy as np
 from sqlite_vec import serialize_float32
 
 from .db import connection, init_db
 from .embedder import embed_query
 from .reranker import RerankCandidate, rerank
+from .repository import fetch_embeddings_by_ids, fetch_memories_by_ids
 
 import re
 
 RRF_K = 60
 HALF_LIFE_DAYS = 30
 TOP_K = 50
+RERANK_TOP = 10
+MMR_LAMBDA = 0.7
 
 
 @dataclass
@@ -25,6 +29,12 @@ class SearchResult:
     score: float
     created_at: str
     project_path: str | None
+
+    def with_score(self, score: float) -> "SearchResult":
+        return SearchResult(
+            id=self.id, question=self.question, answer=self.answer,
+            score=score, created_at=self.created_at, project_path=self.project_path,
+        )
 
 
 def time_decay(created_at_str: str, half_life_days: float = HALF_LIFE_DAYS) -> float:
@@ -94,10 +104,54 @@ def search_vector(conn: sqlite3.Connection, query_embedding: list[float], limit:
     return [r[0] for r in rows]
 
 
-RERANK_TOP = 10
+def mmr_select(
+    results: list[SearchResult],
+    embeddings: dict[int, np.ndarray],
+    limit: int,
+    lambda_param: float = MMR_LAMBDA,
+) -> list[SearchResult]:
+    """MMRで関連性と多様性のバランスを取りながら結果を選択"""
+    if len(results) <= 1:
+        return results[:limit]
+
+    candidates = list(results)
+    selected: list[SearchResult] = []
+    selected_vecs: list[np.ndarray] = []
+
+    # スコアを0-1に正規化
+    max_score = max(r.score for r in candidates)
+    min_score = min(r.score for r in candidates)
+    score_range = max_score - min_score if max_score > min_score else 1.0
+
+    while candidates and len(selected) < limit:
+        best_idx = -1
+        best_mmr = -float("inf")
+
+        for i, cand in enumerate(candidates):
+            relevance = (cand.score - min_score) / score_range
+
+            if not selected_vecs or cand.id not in embeddings:
+                max_sim = 0.0
+            else:
+                cand_vec = embeddings[cand.id]
+                sims = [float(np.dot(cand_vec, sv) / (np.linalg.norm(cand_vec) * np.linalg.norm(sv) + 1e-9))
+                        for sv in selected_vecs]
+                max_sim = max(sims)
+
+            mmr_score = lambda_param * relevance - (1 - lambda_param) * max_sim
+            if mmr_score > best_mmr:
+                best_mmr = mmr_score
+                best_idx = i
+
+        chosen = candidates.pop(best_idx)
+        selected.append(chosen)
+        if chosen.id in embeddings:
+            selected_vecs.append(embeddings[chosen.id])
+
+    return selected
 
 
-def search(query: str, limit: int = 10, project_path: str | None = None, use_rerank: bool = False) -> list[SearchResult]:
+def search(query: str, limit: int = 10, project_path: str | None = None, use_rerank: bool = False, use_mmr: bool = False) -> list[SearchResult]:
     query_embedding = embed_query(query)
 
     with connection() as conn:
@@ -111,50 +165,40 @@ def search(query: str, limit: int = 10, project_path: str | None = None, use_rer
             return []
 
         all_ids = list(rrf_scores.keys())
-        placeholders = ",".join("?" * len(all_ids))
-        query_sql = f"SELECT id, question, answer, created_at, project_path FROM memories WHERE id IN ({placeholders})"
-        params = all_ids
-        if project_path:
-            query_sql += " AND project_path = ?"
-            params = all_ids + [project_path]
+        rows = fetch_memories_by_ids(conn, all_ids, project_path)
 
-        rows = conn.execute(query_sql, params).fetchall()
+        results = []
+        for row in rows:
+            mid = row[0]
+            rrf_score = rrf_scores.get(mid, 0.0)
+            decay = time_decay(row[3])
+            results.append(SearchResult(
+                id=mid, question=row[1], answer=row[2],
+                score=rrf_score * decay, created_at=row[3], project_path=row[4],
+            ))
 
-    results = []
-    for row in rows:
-        mid = row[0]
-        rrf_score = rrf_scores.get(mid, 0.0)
-        decay = time_decay(row[3])
-        results.append(SearchResult(
-            id=mid, question=row[1], answer=row[2],
-            score=rrf_score * decay, created_at=row[3], project_path=row[4],
-        ))
+        results.sort(key=lambda r: r.score, reverse=True)
 
-    results.sort(key=lambda r: r.score, reverse=True)
+        # 重複排除
+        seen = set()
+        deduped = []
+        for r in results:
+            key = (r.question, r.answer)
+            if key not in seen:
+                seen.add(key)
+                deduped.append(r)
 
-    # 重複排除
-    seen = set()
-    deduped = []
-    for r in results:
-        key = (r.question, r.answer)
-        if key not in seen:
-            seen.add(key)
-            deduped.append(r)
+        if use_rerank:
+            candidates = [
+                RerankCandidate(text=f"{r.question}\n{r.answer}", source=r)
+                for r in deduped[:RERANK_TOP]
+            ]
+            reranked = rerank(query, candidates, top_k=limit)
+            deduped = [c.source.with_score(c.rerank_score) for c in reranked]
 
-    if not use_rerank:
-        return deduped[:limit]
+        if use_mmr:
+            mmr_ids = [r.id for r in deduped[:RERANK_TOP]]
+            embeddings = fetch_embeddings_by_ids(conn, mmr_ids)
+            return mmr_select(deduped[:RERANK_TOP], embeddings, limit)
 
-    # リランキング
-    candidates = [
-        RerankCandidate(text=f"{r.question}\n{r.answer}", source=r)
-        for r in deduped[:RERANK_TOP]
-    ]
-    reranked = rerank(query, candidates, top_k=limit)
-
-    return [
-        SearchResult(
-            id=c.source.id, question=c.source.question, answer=c.source.answer,
-            score=c.rerank_score, created_at=c.source.created_at, project_path=c.source.project_path,
-        )
-        for c in reranked
-    ]
+    return deduped[:limit]

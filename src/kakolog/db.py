@@ -2,7 +2,6 @@ import sqlite3
 from pathlib import Path
 
 import sqlite_vec
-from sqlite_vec import serialize_float32
 
 DEFAULT_DB_PATH = Path.home() / ".kakolog" / "memory.db"
 EMBEDDING_DIM = 256
@@ -79,46 +78,3 @@ def init_db(conn: sqlite3.Connection) -> None:
         pass  # already exists
 
     conn.commit()
-
-
-def touch_if_exists(conn: sqlite3.Connection, question: str, answer: str, project_path: str | None = None) -> bool:
-    """同一Q&A+project_pathが存在すればcreated_atを更新してTrueを返す。"""
-    row = conn.execute(
-        "SELECT id FROM memories WHERE question = ? AND answer = ? AND project_path IS ? LIMIT 1",
-        [question, answer, project_path],
-    ).fetchone()
-    if row:
-        conn.execute(
-            "UPDATE memories SET created_at = CURRENT_TIMESTAMP WHERE id = ?",
-            [row[0]],
-        )
-        conn.commit()
-        return True
-    return False
-
-
-def insert_memory(
-    conn: sqlite3.Connection,
-    session_id: str,
-    question: str,
-    answer: str,
-    embedding: list[float],
-    project_path: str | None = None,
-) -> int:
-    cursor = conn.execute(
-        "INSERT INTO memories(session_id, question, answer, project_path) VALUES (?, ?, ?, ?)",
-        [session_id, question, answer, project_path],
-    )
-    memory_id = cursor.lastrowid
-    conn.execute(
-        "INSERT INTO vec_memories(memory_id, embedding) VALUES (?, ?)",
-        [memory_id, serialize_float32(embedding)],
-    )
-    conn.commit()
-    return memory_id
-
-
-def get_stats(conn: sqlite3.Connection) -> dict:
-    memories = conn.execute("SELECT COUNT(*) FROM memories").fetchone()[0]
-    sessions = conn.execute("SELECT COUNT(DISTINCT session_id) FROM memories").fetchone()[0]
-    return {"memories": memories, "sessions": sessions}

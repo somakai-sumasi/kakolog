@@ -3,12 +3,13 @@
 import argparse
 import sys
 
-from .db import connection, init_db, get_stats
+from .db import connection, init_db
+from .repository import get_stats
 from .search import search
 
 
 def cmd_search(args):
-    results = search(args.query, limit=args.limit, project_path=args.project, use_rerank=args.rerank)
+    results = search(args.query, limit=args.limit, project_path=args.project, use_rerank=args.rerank, use_mmr=args.mmr)
     if not results:
         print("No memories found.")
         return
@@ -36,6 +37,8 @@ def main():
     p_search.add_argument("-n", "--limit", type=int, default=5)
     p_search.add_argument("-p", "--project", default=None)
     p_search.add_argument("--rerank", action="store_true", help="Enable cross-encoder reranking")
+    p_search.add_argument("--no-mmr", dest="mmr", action="store_false", help="Disable MMR diversity reranking")
+    p_search.set_defaults(mmr=True)
 
     p_stats = sub.add_parser("stats", help="Show memory stats")
 
