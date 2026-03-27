@@ -10,10 +10,11 @@ MCPサーバー（streamable-http）方式。launchdで常駐起動し、Claude 
 
 ```
 [Claude Code] --MCP(http:7377)--> [kakolog-mcp (launchd常駐)]
-                                      ├── search           (検索: FTS5 + vec → RRF → Reranking)
-                                      ├── save             (保存: チャンク分割 → 埋め込み → DB保存)
-                                      ├── stats            (統計)
-                                      └── POST /hook/save  (SessionEndフック専用HTTP endpoint)
+                                      ├── search              (検索: FTS5 + vec → RRF → Reranking)
+                                      ├── save                (保存: チャンク分割 → 埋め込み → DB保存)
+                                      ├── stats               (統計)
+                                      ├── exclude_list/add/remove  (保存除外パス管理)
+                                      └── POST /hook/save     (SessionEndフック専用HTTP endpoint)
 
 [SessionEnd hook] --curl--> [kakolog-mcp :7377/hook/save]
 ```
@@ -41,7 +42,8 @@ src/kakolog/
 ├── chunker.py      # JSONL→Q&Aチャンク分割 (ノイズフィルタ+MeCab重要語判定)
 ├── embedder.py     # Ruri v3-30m (CPU, 256次元)
 ├── cli.py          # 手動検索・stats用CLI
-└── bulk_import.py  # 過去セッション一括インポート
+├── bulk_import.py  # 過去セッション一括インポート
+└── config.py       # ユーザー設定 (~/.kakolog/config.json, 除外パス管理)
 hooks/
 ├── save-on-session-end.sh  # SessionEndフック (curlでMCPサーバーに転送)
 └── start-server.sh         # launchd用サーバー起動スクリプト
