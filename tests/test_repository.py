@@ -1,7 +1,6 @@
 import numpy as np
 
 from kakolog.db import EMBEDDING_DIM, Memory
-from kakolog.db import Memory
 from kakolog.repository import (
     MemoryToSave,
     fetch_embeddings_by_ids,

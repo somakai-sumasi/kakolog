@@ -7,7 +7,7 @@ from .config import is_excluded
 from .db import Memory, connection
 from .embedder import embed_documents
 from .repository import MemoryToSave, find_memory_by_qa, insert_memory, update_memory
-from .transcript import SessionMeta, read_session_meta
+from .transcript import read_session_meta
 
 _EXCLUDED_ENTRYPOINTS = frozenset({"sdk-cli"})
 _EXCLUDED_PATH_PARTS = frozenset({"subagents"})
