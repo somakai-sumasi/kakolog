@@ -1,13 +1,9 @@
 from unittest.mock import MagicMock, patch
 
-from kakolog.chunker import (
-    QAChunk,
-    clean_text,
-    extract_conversations,
-    extract_text,
-    is_trivial,
-    parse_jsonl,
-)
+from kakolog.chunker import QAChunk
+from kakolog.cleaner import clean_text, is_trivial
+from kakolog.extractor import extract_conversations, extract_text
+from kakolog.transcript import parse_jsonl
 
 
 class TestCleanText:
@@ -73,7 +69,10 @@ class TestExtractConversations:
         ]
         pairs = extract_conversations(messages)
         assert len(pairs) == 1
-        assert pairs[0] == ("Q1", "A1")
+        q, a, ts = pairs[0]
+        assert q == "Q1"
+        assert a == "A1"
+        assert ts is None
 
     def test_multiple_pairs(self):
         messages = [

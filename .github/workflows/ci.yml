@@ -14,12 +14,12 @@ jobs:
       - uses: astral-sh/setup-uv@v4
         with:
           version: "latest"
-      - uses: astral-sh/ruff-action@v3
-        with:
-          args: "check src/ tests/"
-      - uses: astral-sh/ruff-action@v3
-        with:
-          args: "format --check src/ tests/"
+      - name: Install dependencies
+        run: uv sync --group dev
+      - name: Lint
+        run: uv run ruff check src/ tests/
+      - name: Format check
+        run: uv run ruff format --check src/ tests/
 
   test:
     runs-on: ubuntu-latest

@@ -38,6 +38,10 @@ class connection:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.conn:
+            if exc_type is None:
+                self.conn.commit()
+            else:
+                self.conn.rollback()
             self.conn.close()
         return False
 

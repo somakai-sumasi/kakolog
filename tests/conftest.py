@@ -41,9 +41,13 @@ def mock_embedder():
 @pytest.fixture()
 def tmp_config(tmp_path):
     """config.py の CONFIG_PATH を一時ディレクトリに差し替え"""
+    from kakolog.config import _get_exclude_paths_cached
+
     config_path = tmp_path / "config.json"
     with patch("kakolog.config.CONFIG_PATH", config_path):
+        _get_exclude_paths_cached.cache_clear()
         yield config_path
+    _get_exclude_paths_cached.cache_clear()
 
 
 @pytest.fixture()

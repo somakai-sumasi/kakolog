@@ -1,5 +1,6 @@
 """japanese-reranker-tiny-v2 によるリランキング"""
 
+import functools
 import platform
 from dataclasses import dataclass
 from typing import Any
@@ -7,7 +8,6 @@ from typing import Any
 from sentence_transformers import CrossEncoder
 
 MODEL_NAME = "hotchpotch/japanese-reranker-tiny-v2"
-_reranker: CrossEncoder | None = None
 
 
 def _onnx_file_name() -> str:
@@ -17,25 +17,23 @@ def _onnx_file_name() -> str:
     return "onnx/model_qint8_avx2.onnx"
 
 
-@dataclass
+@dataclass(frozen=True)
 class RerankCandidate:
     text: str
     source: Any
     rerank_score: float = 0.0
 
 
+@functools.lru_cache(maxsize=1)
 def get_reranker() -> CrossEncoder:
-    global _reranker
-    if _reranker is None:
-        _reranker = CrossEncoder(
-            MODEL_NAME,
-            backend="onnx",
-            model_kwargs={
-                "providers": ["CPUExecutionProvider"],
-                "file_name": _onnx_file_name(),
-            },
-        )
-    return _reranker
+    return CrossEncoder(
+        MODEL_NAME,
+        backend="onnx",
+        model_kwargs={
+            "providers": ["CPUExecutionProvider"],
+            "file_name": _onnx_file_name(),
+        },
+    )
 
 
 def rerank(
