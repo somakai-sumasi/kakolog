@@ -38,7 +38,9 @@ def get_reranker() -> CrossEncoder:
     return _reranker
 
 
-def rerank(query: str, candidates: list[RerankCandidate], top_k: int = 10) -> list[RerankCandidate]:
+def rerank(
+    query: str, candidates: list[RerankCandidate], top_k: int = 10
+) -> list[RerankCandidate]:
     """RRF後の候補をリランキングする。新しいリストを返す。"""
     if not candidates:
         return []

@@ -11,7 +11,7 @@ def _load() -> dict:
         return {"exclude_paths": []}
     try:
         return json.loads(CONFIG_PATH.read_text())
-    except Exception:
+    except (json.JSONDecodeError, OSError):
         return {"exclude_paths": []}
 
 
@@ -45,6 +45,8 @@ def is_excluded(project_path: str | None) -> bool:
     if not project_path:
         return False
     for excluded in get_exclude_paths():
-        if project_path == excluded or project_path.startswith(excluded.rstrip("/") + "/"):
+        if project_path == excluded or project_path.startswith(
+            excluded.rstrip("/") + "/"
+        ):
             return True
     return False

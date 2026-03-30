@@ -1,15 +1,20 @@
 """CLIエントリポイント。手動で検索やステータス確認に使う。"""
 
 import argparse
-import sys
 
-from .db import connection, init_db
+from .db import connection
 from .repository import get_stats
 from .search import search
 
 
 def cmd_search(args):
-    results = search(args.query, limit=args.limit, project_path=args.project, use_rerank=args.rerank, use_mmr=args.mmr)
+    results = search(
+        args.query,
+        limit=args.limit,
+        project_path=args.project,
+        use_rerank=args.rerank,
+        use_mmr=args.mmr,
+    )
     if not results:
         print("No memories found.")
         return
@@ -22,25 +27,33 @@ def cmd_search(args):
 
 def cmd_stats(args):
     with connection() as conn:
-        init_db(conn)
-        stats = get_stats(conn)
-    print(f"Total memories: {stats['memories']}")
-    print(f"Total sessions: {stats['sessions']}")
+        s = get_stats(conn)
+    print(f"Total memories: {s.memories}")
+    print(f"Total sessions: {s.sessions}")
 
 
 def main():
-    parser = argparse.ArgumentParser(prog="kakolog", description="Claude Code long-term memory")
+    parser = argparse.ArgumentParser(
+        prog="kakolog", description="Claude Code long-term memory"
+    )
     sub = parser.add_subparsers(dest="command")
 
     p_search = sub.add_parser("search", help="Search memories")
     p_search.add_argument("query", help="Search query")
     p_search.add_argument("-n", "--limit", type=int, default=5)
     p_search.add_argument("-p", "--project", default=None)
-    p_search.add_argument("--rerank", action="store_true", help="Enable cross-encoder reranking")
-    p_search.add_argument("--no-mmr", dest="mmr", action="store_false", help="Disable MMR diversity reranking")
+    p_search.add_argument(
+        "--rerank", action="store_true", help="Enable cross-encoder reranking"
+    )
+    p_search.add_argument(
+        "--no-mmr",
+        dest="mmr",
+        action="store_false",
+        help="Disable MMR diversity reranking",
+    )
     p_search.set_defaults(mmr=True)
 
-    p_stats = sub.add_parser("stats", help="Show memory stats")
+    sub.add_parser("stats", help="Show memory stats")
 
     args = parser.parse_args()
     if args.command == "search":

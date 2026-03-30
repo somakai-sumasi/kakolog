@@ -1,11 +1,10 @@
 import json
 import os
 import re
-from dataclasses import dataclass
-from pathlib import Path
-
 import shutil
 import subprocess
+from dataclasses import dataclass
+from pathlib import Path
 
 import MeCab
 
@@ -84,15 +83,26 @@ _NOISE_TAG_RE = re.compile(
 )
 
 # 自己完結タグ
-_NOISE_SELF_CLOSING_RE = re.compile(
-    r"<(?:task-notification|system-reminder)[^>]*/>"
-)
+_NOISE_SELF_CLOSING_RE = re.compile(r"<(?:task-notification|system-reminder)[^>]*/>")
 
 # 意味のない短い入力
-_TRIVIAL_INPUTS = frozenset([
-    "y", "yes", "ok", "はい", "うん", "続けて", "続き", "お願い",
-    "いいよ", "それで", "進めて", "やって", "頼む",
-])
+_TRIVIAL_INPUTS = frozenset(
+    [
+        "y",
+        "yes",
+        "ok",
+        "はい",
+        "うん",
+        "続けて",
+        "続き",
+        "お願い",
+        "いいよ",
+        "それで",
+        "進めて",
+        "やって",
+        "頼む",
+    ]
+)
 
 
 _NOISE_LINE_PREFIXES = [
@@ -102,10 +112,12 @@ _NOISE_LINE_PREFIXES = [
 ]
 
 # 情報量ゼロの定型回答
-_EMPTY_ANSWERS = frozenset([
-    "No response requested.",
-    "No response requested",
-])
+_EMPTY_ANSWERS = frozenset(
+    [
+        "No response requested.",
+        "No response requested",
+    ]
+)
 
 
 def clean_text(text: str) -> str:
@@ -113,7 +125,11 @@ def clean_text(text: str) -> str:
     text = _NOISE_SELF_CLOSING_RE.sub("", text)
     # ノイズ行を除去
     lines = text.split("\n")
-    lines = [l for l in lines if not any(l.strip().startswith(p) for p in _NOISE_LINE_PREFIXES)]
+    lines = [
+        line
+        for line in lines
+        if not any(line.strip().startswith(p) for p in _NOISE_LINE_PREFIXES)
+    ]
     text = "\n".join(lines)
     # 連続空行を1つに
     text = re.sub(r"\n{3,}", "\n\n", text)
@@ -155,8 +171,7 @@ def _is_tool_result(content) -> bool:
     """contentがtool_resultのみかどうか。"""
     if isinstance(content, list):
         return all(
-            isinstance(b, dict) and b.get("type") == "tool_result"
-            for b in content
+            isinstance(b, dict) and b.get("type") == "tool_result" for b in content
         )
     return False
 
@@ -170,7 +185,6 @@ def extract_conversations(messages: list[dict]) -> list[tuple[str, str]]:
     pairs = []
     current_user = None
     current_answer_parts: list[str] = []
-    in_tool_loop = False  # ツール実行ループ中かどうか
 
     for entry in messages:
         msg = entry.get("message", {})
@@ -182,7 +196,6 @@ def extract_conversations(messages: list[dict]) -> list[tuple[str, str]]:
 
         # tool_resultのuserメッセージはスキップ（ツールループの一部）
         if role == "user" and _is_tool_result(content):
-            in_tool_loop = True
             continue
 
         text = extract_text(content).strip()
@@ -193,18 +206,9 @@ def extract_conversations(messages: list[dict]) -> list[tuple[str, str]]:
                 pairs.append((current_user, "\n\n".join(current_answer_parts)))
             current_user = text if text else None
             current_answer_parts = []
-            in_tool_loop = False
         elif role == "assistant" and current_user:
             if text:
                 current_answer_parts.append(text)
-            # tool_useがあればループフラグを立てる
-            if isinstance(content, list):
-                has_tool = any(
-                    isinstance(b, dict) and b.get("type") == "tool_use"
-                    for b in content
-                )
-                if has_tool:
-                    in_tool_loop = True
 
     # 最後のペアを確定
     if current_user and current_answer_parts:
