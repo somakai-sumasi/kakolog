@@ -13,13 +13,23 @@ uv sync
 claude mcp add -s user --transport http kakolog http://localhost:7377/mcp
 ```
 
-## 3. SessionEnd Hook設定
+## 3. Hook設定
 
 `~/.claude/settings.json` に以下を追加:
 
 ```json
 {
   "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/path/to/kakolog/hooks/save-on-session-end.sh"
+          }
+        ]
+      }
+    ],
     "SessionEnd": [
       {
         "hooks": [
@@ -33,6 +43,8 @@ claude mcp add -s user --transport http kakolog http://localhost:7377/mcp
   }
 }
 ```
+
+`Stop`フック（毎ターン）と`SessionEnd`フック（プロセス終了時）の両方を設定する。`/new`やターミナル強制終了時のデータ欠損を防ぐため。
 
 ## 4. サーバー自動起動 (macOS)
 
