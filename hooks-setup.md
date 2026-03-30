@@ -20,16 +20,6 @@ claude mcp add -s user --transport http kakolog http://localhost:7377/mcp
 ```json
 {
   "hooks": {
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/path/to/kakolog/hooks/save-on-session-end.sh"
-          }
-        ]
-      }
-    ],
     "SessionEnd": [
       {
         "hooks": [
@@ -44,7 +34,7 @@ claude mcp add -s user --transport http kakolog http://localhost:7377/mcp
 }
 ```
 
-`UserPromptSubmit`フック（ユーザーがメッセージ送信するたび）と`SessionEnd`フック（`/new`・通常終了時）の両方を設定する。ターミナル強制終了時のデータ欠損を防ぐため。
+`SessionEnd`フックは`/new`（`reason:clear`）・通常終了・exit時に発火する。
 
 ## 4. サーバー自動起動 (macOS)
 
