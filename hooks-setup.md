@@ -13,7 +13,7 @@ uv sync
 claude mcp add -s user --transport http kakolog http://localhost:7377/mcp
 ```
 
-## 3. SessionEnd Hook設定
+## 3. Hook設定
 
 `~/.claude/settings.json` に以下を追加:
 
@@ -33,6 +33,8 @@ claude mcp add -s user --transport http kakolog http://localhost:7377/mcp
   }
 }
 ```
+
+`SessionEnd`フックは`/new`（`reason:clear`）・通常終了・exit時に発火する。
 
 ## 4. サーバー自動起動 (macOS)
 
