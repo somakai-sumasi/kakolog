@@ -7,11 +7,11 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from .config import add_exclude_path, get_exclude_paths, remove_exclude_path
+from .db import connection
 from .embedder import get_model
+from .repository import get_stats
 from .search import search as do_search
 from .service import save_session
-from .db import connection, init_db
-from .repository import get_stats
 
 HOST = "127.0.0.1"
 PORT = 7377
@@ -20,7 +20,9 @@ mcp = FastMCP("kakolog", host=HOST, port=PORT)
 
 
 @mcp.tool()
-def search(query: str, limit: int = 5, use_rerank: bool = False, use_mmr: bool = True) -> list[dict]:
+def search(
+    query: str, limit: int = 5, use_rerank: bool = False, use_mmr: bool = True
+) -> list[dict]:
     """過去のClaude Codeセッション会話を検索する。
     キーワード+意味検索のハイブリッド。具体的なキーワードほど精度が高い。
     use_rerank=Trueでcross-encoderリランキングを有効化（精度向上、速度低下）。
@@ -39,7 +41,9 @@ def search(query: str, limit: int = 5, use_rerank: bool = False, use_mmr: bool =
 
 
 @mcp.tool()
-def save(session_id: str, transcript_path: str, project_path: str | None = None) -> dict:
+def save(
+    session_id: str, transcript_path: str, project_path: str | None = None
+) -> dict:
     """セッション会話をメモリに保存する。通常はSessionEndフックから呼ばれる。"""
     count = save_session(session_id, transcript_path, project_path)
     return {"saved": count, "session_id": session_id}
@@ -49,8 +53,8 @@ def save(session_id: str, transcript_path: str, project_path: str | None = None)
 def stats() -> dict:
     """メモリの統計情報を返す。"""
     with connection() as conn:
-        init_db(conn)
-        return get_stats(conn)
+        s = get_stats(conn)
+        return {"memories": s.memories, "sessions": s.sessions}
 
 
 @mcp.custom_route("/hook/save", methods=["POST"])
@@ -58,7 +62,9 @@ async def hook_save(request: Request) -> JSONResponse:
     """SessionEndフック専用エンドポイント。curl一発で呼べる軽量HTTP API。"""
     data = await request.json()
     if not data.get("session_id") or not data.get("transcript_path"):
-        return JSONResponse({"error": "session_id and transcript_path are required"}, status_code=400)
+        return JSONResponse(
+            {"error": "session_id and transcript_path are required"}, status_code=400
+        )
     count = save_session(data["session_id"], data["transcript_path"], data.get("cwd"))
     return JSONResponse({"saved": count, "session_id": data["session_id"]})
 
@@ -86,8 +92,8 @@ def main():
     get_model()
     print("[kakolog] Model loaded. Starting MCP server.", file=sys.stderr)
 
-    with connection() as conn:
-        init_db(conn)
+    with connection():
+        pass  # init_db is called automatically
 
     print(f"[kakolog] MCP server on {HOST}:{PORT}", file=sys.stderr)
     mcp.run(transport="streamable-http")
