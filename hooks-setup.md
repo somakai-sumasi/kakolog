@@ -20,7 +20,7 @@ claude mcp add -s user --transport http kakolog http://localhost:7377/mcp
 ```json
 {
   "hooks": {
-    "Stop": [
+    "UserPromptSubmit": [
       {
         "hooks": [
           {
@@ -44,7 +44,7 @@ claude mcp add -s user --transport http kakolog http://localhost:7377/mcp
 }
 ```
 
-`Stop`フック（毎ターン）と`SessionEnd`フック（プロセス終了時）の両方を設定する。`/new`やターミナル強制終了時のデータ欠損を防ぐため。
+`UserPromptSubmit`フック（ユーザーがメッセージ送信するたび）と`SessionEnd`フック（`/new`・通常終了時）の両方を設定する。ターミナル強制終了時のデータ欠損を防ぐため。
 
 ## 4. サーバー自動起動 (macOS)
 
