@@ -28,6 +28,9 @@ MCPサーバー（streamable-http）方式。launchdで常駐起動し、Claude 
 | リランカー | japanese-reranker-tiny-v2 (ONNX int8) | RRF上位10件をcross-encoderで精査 |
 | DB | SQLite (FTS5 trigram + sqlite-vec) | `~/.kakolog/memory.db` |
 | 形態素解析 | MeCab (IPAdic) | チャンクフィルタリング時の重要語判定 |
+| Linter/Formatter | Ruff | `ruff check` + `ruff format` |
+| テスト | pytest + pytest-cov | 58件のユニットテスト |
+| CI | GitHub Actions | lint + test を自動実行 |
 | Python | 3.11.11 | SQLite拡張対応ビルドが必要 |
 
 ## ファイル構成
@@ -45,6 +48,17 @@ src/kakolog/
 ├── cli.py          # 手動検索・stats用CLI
 ├── bulk_import.py  # 過去セッション一括インポート
 └── config.py       # ユーザー設定 (~/.kakolog/config.json, 除外パス管理)
+tests/
+├── conftest.py         # 共通フィクスチャ (in-memory DB, embedderモック等)
+├── test_chunker.py     # チャンク分割テスト
+├── test_config.py      # 設定I/O、パス除外判定テスト
+├── test_db.py          # スキーマ作成、冪等性テスト
+├── test_embedder.py    # 埋め込みモデルモックテスト
+├── test_repository.py  # CRUD操作、統計テスト
+├── test_search.py      # RRF、MMR、時間減衰テスト
+└── test_service.py     # セッション保存オーケストレーションテスト
+.github/workflows/
+└── ci.yml              # GitHub Actions (lint + test)
 hooks/
 ├── save-on-session-end.sh  # SessionEndフック (バックグラウンドcurlでMCPサーバーに転送)
 └── start-server.sh         # launchd用サーバー起動スクリプト
@@ -61,6 +75,12 @@ uv run kakolog search "クエリ"      # 手動検索
 uv run kakolog stats               # 統計
 uv run kakolog-import              # 過去セッション一括インポート (~10分)
 rm ~/.kakolog/memory.db && uv run kakolog-import  # DB再構築
+
+# 開発
+uv run ruff check src/ tests/      # lint
+uv run ruff format src/ tests/     # フォーマット
+uv run pytest -v                   # テスト実行
+uv run pytest -v --tb=short        # テスト実行 (短縮出力)
 ```
 
 ## MCP登録
@@ -92,16 +112,17 @@ stdioで登録するとセッション起動時にポート競合して接続失
 
 `SessionEnd`は`/new`（`reason:clear`）・通常終了・exit時に発火し会話を保存する。curlはバックグラウンド実行（`&`）なのでClaudeの応答をブロックしない。
 
-## チャンク分割の方針
+## チャンク分割・検索パイプライン
 
-- assistant回答結合: ツール実行を挟む複数応答を結合
-- ノイズ除去: XMLタグ、定型応答、トリビアル入力をフィルタ
-- MeCab wcost判定: 50文字未満のチャンクは`WCOST_THRESHOLD=6000`以上の名詞があれば採用
-- 重複排除: 同一Q&A+project_pathは1件のみ保存。再出現時はcreated_atを更新（時間減衰リセット）
+詳細はREADME.mdを参照。概要:
 
-## 検索パイプライン
+- **チャンク分割**: assistant回答結合 → ノイズ除去 → MeCab wcost重要語判定(閾値6000) → 重複排除
+- **検索**: FTS5 + sqlite-vec → RRF(k=60) × 時間減衰(30日半減期) → MMR(λ=0.7) → [オプション] Reranking
 
-FTS5(キーワード) + sqlite-vec(ベクトル) → RRF統合(k=60, ターム一致率ブースト) × 時間減衰(30日半減期) → MMR多様性選択(λ=0.7, デフォルト有効)。`use_rerank=True`でjapanese-reranker-tiny-v2によるリランキング(上位10件)を追加可能
+## データモデル
+
+- `Memory`, `Stats`, `SearchResult` は全て `frozen=True` の dataclass。`sqlite3.Row`は使わない
+- `init_db()` は `connection.__enter__` に統合済み。個別呼び出し不要
 
 ## Gotchas
 
