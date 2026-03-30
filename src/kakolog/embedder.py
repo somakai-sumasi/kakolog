@@ -1,14 +1,13 @@
+import functools
+
 from sentence_transformers import SentenceTransformer
 
 MODEL_NAME = "cl-nagoya/ruri-v3-30m"
-_model: SentenceTransformer | None = None
 
 
+@functools.lru_cache(maxsize=1)
 def get_model() -> SentenceTransformer:
-    global _model
-    if _model is None:
-        _model = SentenceTransformer(MODEL_NAME, device="cpu")
-    return _model
+    return SentenceTransformer(MODEL_NAME, device="cpu")
 
 
 def embed_query(text: str) -> list[float]:
@@ -25,6 +24,5 @@ def embed_document(text: str) -> list[float]:
 
 def embed_documents(texts: list[str]) -> list[list[float]]:
     model = get_model()
-    prefixed = [f"検索文書: {t}" for t in texts]
-    vecs = model.encode(prefixed, normalize_embeddings=True, batch_size=8)
+    vecs = model.encode([f"検索文書: {t}" for t in texts], normalize_embeddings=True, batch_size=8)
     return vecs.tolist()
