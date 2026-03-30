@@ -36,7 +36,13 @@ def update_memory(conn: sqlite3.Connection, memory: Memory) -> None:
     """メモリをIDをキーに更新する。"""
     conn.execute(
         "UPDATE memories SET question = ?, answer = ?, created_at = ?, project_path = ? WHERE id = ?",
-        [memory.question, memory.answer, memory.created_at, memory.project_path, memory.id],
+        [
+            memory.question,
+            memory.answer,
+            memory.created_at,
+            memory.project_path,
+            memory.id,
+        ],
     )
 
 
@@ -54,7 +60,13 @@ def insert_memory(conn: sqlite3.Connection, memory: MemoryToSave) -> int:
     cursor = conn.execute(
         "INSERT INTO memories(session_id, question, answer, project_path, created_at)"
         " VALUES (?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))",
-        [memory.session_id, memory.question, memory.answer, memory.project_path, memory.created_at],
+        [
+            memory.session_id,
+            memory.question,
+            memory.answer,
+            memory.project_path,
+            memory.created_at,
+        ],
     )
     memory_id = cursor.lastrowid
     assert memory_id is not None

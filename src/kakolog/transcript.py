@@ -42,7 +42,11 @@ def read_session_meta(transcript_path: str) -> SessionMeta:
                 cwd = entry["cwd"]
             if entrypoint is None and entry.get("entrypoint"):
                 entrypoint = entry["entrypoint"]
-            if cwd is not None and entrypoint is not None and first_timestamp is not None:
+            if (
+                cwd is not None
+                and entrypoint is not None
+                and first_timestamp is not None
+            ):
                 break
     except Exception:
         pass

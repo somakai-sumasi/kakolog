@@ -24,5 +24,7 @@ def embed_document(text: str) -> list[float]:
 
 def embed_documents(texts: list[str]) -> list[list[float]]:
     model = get_model()
-    vecs = model.encode([f"検索文書: {t}" for t in texts], normalize_embeddings=True, batch_size=8)
+    vecs = model.encode(
+        [f"検索文書: {t}" for t in texts], normalize_embeddings=True, batch_size=8
+    )
     return vecs.tolist()

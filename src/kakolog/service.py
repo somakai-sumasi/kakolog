@@ -41,24 +41,32 @@ def save_session(
         count = 0
         for chunk, emb in zip(chunks, embeddings):
             ts = chunk.timestamp or meta.first_timestamp
-            existing = find_memory_by_qa(conn, chunk.question, chunk.answer, resolved_project_path)
+            existing = find_memory_by_qa(
+                conn, chunk.question, chunk.answer, resolved_project_path
+            )
             if existing:
-                update_memory(conn, Memory(
-                    id=existing.id,
-                    question=existing.question,
-                    answer=existing.answer,
-                    created_at=ts if ts is not None else existing.created_at,
-                    project_path=existing.project_path,
-                ))
+                update_memory(
+                    conn,
+                    Memory(
+                        id=existing.id,
+                        question=existing.question,
+                        answer=existing.answer,
+                        created_at=ts if ts is not None else existing.created_at,
+                        project_path=existing.project_path,
+                    ),
+                )
                 continue
-            insert_memory(conn, MemoryToSave(
-                session_id=session_id,
-                question=chunk.question,
-                answer=chunk.answer,
-                embedding=emb,
-                project_path=resolved_project_path,
-                created_at=ts,
-            ))
+            insert_memory(
+                conn,
+                MemoryToSave(
+                    session_id=session_id,
+                    question=chunk.question,
+                    answer=chunk.answer,
+                    embedding=emb,
+                    project_path=resolved_project_path,
+                    created_at=ts,
+                ),
+            )
             count += 1
 
     return count

@@ -48,7 +48,9 @@ def extract_conversations(messages: list[dict]) -> list[tuple[str, str, str | No
 
         if role == "user":
             if current_user and current_answer_parts:
-                pairs.append((current_user, "\n\n".join(current_answer_parts), current_timestamp))
+                pairs.append(
+                    (current_user, "\n\n".join(current_answer_parts), current_timestamp)
+                )
             current_user = text if text else None
             current_timestamp = entry.get("timestamp")
             current_answer_parts = []
@@ -57,6 +59,8 @@ def extract_conversations(messages: list[dict]) -> list[tuple[str, str, str | No
                 current_answer_parts.append(text)
 
     if current_user and current_answer_parts:
-        pairs.append((current_user, "\n\n".join(current_answer_parts), current_timestamp))
+        pairs.append(
+            (current_user, "\n\n".join(current_answer_parts), current_timestamp)
+        )
 
     return pairs

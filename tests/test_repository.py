@@ -17,8 +17,16 @@ def _make_embedding():
     return vec.tolist()
 
 
-def _make_memory(session_id="sess1", question="Q", answer="A", **kwargs) -> MemoryToSave:
-    return MemoryToSave(session_id=session_id, question=question, answer=answer, embedding=_make_embedding(), **kwargs)
+def _make_memory(
+    session_id="sess1", question="Q", answer="A", **kwargs
+) -> MemoryToSave:
+    return MemoryToSave(
+        session_id=session_id,
+        question=question,
+        answer=answer,
+        embedding=_make_embedding(),
+        **kwargs,
+    )
 
 
 class TestInsert:
@@ -72,8 +80,12 @@ class TestFetch:
         assert fetch_memories_by_ids(db_conn, []) == []
 
     def test_fetch_with_project_filter(self, db_conn):
-        id1 = insert_memory(db_conn, _make_memory("s1", "Q1", "A1", project_path="/proj"))
-        id2 = insert_memory(db_conn, _make_memory("s1", "Q2", "A2", project_path="/other"))
+        id1 = insert_memory(
+            db_conn, _make_memory("s1", "Q1", "A1", project_path="/proj")
+        )
+        id2 = insert_memory(
+            db_conn, _make_memory("s1", "Q2", "A2", project_path="/other")
+        )
         memories = fetch_memories_by_ids(db_conn, [id1, id2], project_path="/proj")
         assert len(memories) == 1
         assert memories[0].project_path == "/proj"
