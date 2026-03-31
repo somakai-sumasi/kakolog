@@ -29,7 +29,7 @@ MCPサーバー（streamable-http）方式。launchdで常駐起動し、Claude 
 | DB | SQLite (FTS5 trigram + sqlite-vec) | `~/.kakolog/memory.db` |
 | 形態素解析 | MeCab (IPAdic) | チャンクフィルタリング時の重要語判定 |
 | Linter/Formatter | Ruff | `ruff check` + `ruff format` |
-| テスト | pytest + pytest-cov | 58件のユニットテスト |
+| テスト | pytest + pytest-cov | 62件のユニットテスト |
 | CI | GitHub Actions | lint + test を自動実行 |
 | Python | 3.11.11 | SQLite拡張対応ビルドが必要 |
 
@@ -43,7 +43,7 @@ src/kakolog/
 ├── reranker.py     # japanese-reranker-tiny-v2 (ONNX int8, Cross-Encoder)
 ├── repository.py   # メモリのデータ操作 (CRUD)
 ├── db.py           # SQLite接続 (Context Manager) ・スキーマ管理
-├── chunker.py      # JSONL→Q&Aチャンク分割 (ノイズフィルタ+MeCab重要語判定)
+├── chunker.py      # JSONL→TurnChunk分割 (ノイズフィルタ+MeCab重要語判定)
 ├── embedder.py     # Ruri v3-30m (CPU, 256次元)
 ├── cli.py          # 手動検索・stats用CLI
 ├── bulk_import.py  # 過去セッション一括インポート
@@ -116,13 +116,14 @@ stdioで登録するとセッション起動時にポート競合して接続失
 
 詳細はREADME.mdを参照。概要:
 
-- **チャンク分割**: assistant回答結合 → ノイズ除去 → MeCab wcost重要語判定(閾値6000) → 重複排除
+- **チャンク分割**: agentターン結合 → ノイズ除去 → MeCab wcost重要語判定(閾値6000) → 重複排除
 - **検索**: FTS5 + sqlite-vec → RRF(k=60) × 時間減衰(30日半減期) → MMR(λ=0.7) → [オプション] Reranking
 
 ## データモデル
 
 - `Memory`, `Stats`, `SearchResult` は全て `frozen=True` の dataclass。`sqlite3.Row`は使わない
 - `init_db()` は `connection.__enter__` に統合済み。個別呼び出し不要
+- DBカラムは `user_turn`/`agent_turn`/`last_accessed_at`
 
 ## Gotchas
 

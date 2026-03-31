@@ -24,27 +24,35 @@ SECONDS_PER_DAY = 86400
 @dataclass(frozen=True)
 class SearchResult:
     id: int
-    question: str
-    answer: str
+    user_turn: str
+    agent_turn: str
     score: float
-    created_at: str
+    last_accessed_at: str
     project_path: str | None
 
     def with_score(self, score: float) -> "SearchResult":
         return SearchResult(
             id=self.id,
-            question=self.question,
-            answer=self.answer,
+            user_turn=self.user_turn,
+            agent_turn=self.agent_turn,
             score=score,
-            created_at=self.created_at,
+            last_accessed_at=self.last_accessed_at,
             project_path=self.project_path,
         )
 
 
-def time_decay(created_at_str: str, half_life_days: float = HALF_LIFE_DAYS) -> float:
-    created_at = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
-    now = datetime.now(created_at.tzinfo) if created_at.tzinfo else datetime.now()
-    age_days = (now - created_at).total_seconds() / SECONDS_PER_DAY
+def time_decay(
+    last_accessed_at_str: str, half_life_days: float = HALF_LIFE_DAYS
+) -> float:
+    last_accessed_at = datetime.fromisoformat(
+        last_accessed_at_str.replace("Z", "+00:00")
+    )
+    now = (
+        datetime.now(last_accessed_at.tzinfo)
+        if last_accessed_at.tzinfo
+        else datetime.now()
+    )
+    age_days = (now - last_accessed_at).total_seconds() / SECONDS_PER_DAY
     return 0.5 ** (age_days / half_life_days)
 
 
@@ -59,10 +67,9 @@ def rrf_fuse(
     for rank, doc_id in enumerate(keyword_ids, start=1):
         scores.setdefault(doc_id, 0.0)
         base = 1.0 / (k + rank)
-        # ターム一致率でブースト (全ターム一致=1.0, 1ターム一致=1/N)
         if keyword_term_hits and total_terms > 1:
             hit_ratio = keyword_term_hits.get(doc_id, 1) / total_terms
-            base *= 0.5 + 0.5 * hit_ratio  # 0.5〜1.0の範囲でスケール
+            base *= 0.5 + 0.5 * hit_ratio
         scores[doc_id] += base
     for rank, doc_id in enumerate(vector_ids, start=1):
         scores.setdefault(doc_id, 0.0)
@@ -126,7 +133,6 @@ def mmr_select(
     selected: list[SearchResult] = []
     selected_vecs: list[np.ndarray] = []
 
-    # スコアを0-1に正規化
     max_score = max(r.score for r in candidates)
     min_score = min(r.score for r in candidates)
     score_range = max_score - min_score if max_score > min_score else 1.0
@@ -165,11 +171,11 @@ def mmr_select(
 
 
 def _deduplicate(results: list[SearchResult]) -> list[SearchResult]:
-    """Q&Aペアの重複を排除"""
+    """ターンペアの重複を排除"""
     seen: set[tuple[str, str]] = set()
     deduped = []
     for r in results:
-        key = (r.question, r.answer)
+        key = (r.user_turn, r.agent_turn)
         if key not in seen:
             seen.add(key)
             deduped.append(r)
@@ -199,10 +205,10 @@ def search(
         results = [
             SearchResult(
                 id=m.id,
-                question=m.question,
-                answer=m.answer,
-                score=rrf_scores.get(m.id, 0.0) * time_decay(m.created_at),
-                created_at=m.created_at,
+                user_turn=m.user_turn,
+                agent_turn=m.agent_turn,
+                score=rrf_scores.get(m.id, 0.0) * time_decay(m.last_accessed_at),
+                last_accessed_at=m.last_accessed_at,
                 project_path=m.project_path,
             )
             for m in memories
@@ -213,7 +219,7 @@ def search(
 
         if use_rerank:
             candidates = [
-                RerankCandidate(text=f"{r.question}\n{r.answer}", source=r)
+                RerankCandidate(text=f"{r.user_turn}\n{r.agent_turn}", source=r)
                 for r in deduped[:RERANK_TOP]
             ]
             reranked = rerank(query, candidates, top_k=limit)

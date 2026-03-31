@@ -19,9 +19,9 @@ def cmd_search(args):
         print("No memories found.")
         return
     for r in results:
-        print(f"[{r.id}] score={r.score:.4f} ({r.created_at})")
-        print(f"  Q: {r.question[:100]}")
-        print(f"  A: {r.answer[:200]}")
+        print(f"[{r.id}] score={r.score:.4f} ({r.last_accessed_at})")
+        print(f"  U: {r.user_turn[:100]}")
+        print(f"  A: {r.agent_turn[:200]}")
         print()
 
 

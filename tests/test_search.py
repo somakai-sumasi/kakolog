@@ -51,10 +51,10 @@ class TestMmrSelect:
     def _make_result(self, id: int, score: float) -> SearchResult:
         return SearchResult(
             id=id,
-            question=f"Q{id}",
-            answer=f"A{id}",
+            user_turn=f"U{id}",
+            agent_turn=f"A{id}",
             score=score,
-            created_at=datetime.now().isoformat(),
+            last_accessed_at=datetime.now().isoformat(),
             project_path=None,
         )
 

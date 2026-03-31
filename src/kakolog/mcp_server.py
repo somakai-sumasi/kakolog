@@ -30,10 +30,10 @@ def search(
     results = do_search(query, limit=limit, use_rerank=use_rerank, use_mmr=use_mmr)
     return [
         {
-            "question": r.question,
-            "answer": r.answer,
+            "user_turn": r.user_turn,
+            "agent_turn": r.agent_turn,
             "score": r.score,
-            "created_at": r.created_at,
+            "last_accessed_at": r.last_accessed_at,
             "project_path": r.project_path,
         }
         for r in results
