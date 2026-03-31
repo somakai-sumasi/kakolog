@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 
-from kakolog.chunker import QAChunk
+from kakolog.chunker import TurnChunk
 from kakolog.cleaner import clean_text, is_trivial
 from kakolog.extractor import extract_conversations, extract_text
 from kakolog.transcript import parse_jsonl
@@ -145,4 +145,4 @@ class TestChunkSession:
         chunks = chunk_session(sample_jsonl)
         assert isinstance(chunks, list)
         for chunk in chunks:
-            assert isinstance(chunk, QAChunk)
+            assert isinstance(chunk, TurnChunk)

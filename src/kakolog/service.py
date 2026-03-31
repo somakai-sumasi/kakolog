@@ -6,7 +6,7 @@ from .chunker import chunk_session
 from .config import is_excluded
 from .db import Memory, connection
 from .embedder import embed_documents
-from .repository import MemoryToSave, find_memory_by_qa, insert_memory, update_memory
+from .repository import MemoryToSave, find_memory_by_turns, insert_memory, update_memory
 from .transcript import read_session_meta
 
 _EXCLUDED_ENTRYPOINTS = frozenset({"sdk-cli"})
@@ -41,17 +41,19 @@ def save_session(
         count = 0
         for chunk, emb in zip(chunks, embeddings):
             ts = chunk.timestamp or meta.first_timestamp
-            existing = find_memory_by_qa(
-                conn, chunk.question, chunk.answer, resolved_project_path
+            existing = find_memory_by_turns(
+                conn, chunk.user_turn, chunk.agent_turn, resolved_project_path
             )
             if existing:
                 update_memory(
                     conn,
                     Memory(
                         id=existing.id,
-                        question=existing.question,
-                        answer=existing.answer,
-                        created_at=ts if ts is not None else existing.created_at,
+                        user_turn=existing.user_turn,
+                        agent_turn=existing.agent_turn,
+                        last_accessed_at=ts
+                        if ts is not None
+                        else existing.last_accessed_at,
                         project_path=existing.project_path,
                     ),
                 )
@@ -60,11 +62,11 @@ def save_session(
                 conn,
                 MemoryToSave(
                     session_id=session_id,
-                    question=chunk.question,
-                    answer=chunk.answer,
+                    user_turn=chunk.user_turn,
+                    agent_turn=chunk.agent_turn,
                     embedding=emb,
                     project_path=resolved_project_path,
-                    created_at=ts,
+                    last_accessed_at=ts,
                 ),
             )
             count += 1

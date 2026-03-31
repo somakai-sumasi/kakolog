@@ -5,7 +5,7 @@ from kakolog.repository import (
     MemoryToSave,
     fetch_embeddings_by_ids,
     fetch_memories_by_ids,
-    find_memory_by_qa,
+    find_memory_by_turns,
     get_stats,
     insert_memory,
     update_memory,
@@ -18,12 +18,12 @@ def _make_embedding():
 
 
 def _make_memory(
-    session_id="sess1", question="Q", answer="A", **kwargs
+    session_id="sess1", user_turn="U", agent_turn="A", **kwargs
 ) -> MemoryToSave:
     return MemoryToSave(
         session_id=session_id,
-        question=question,
-        answer=answer,
+        user_turn=user_turn,
+        agent_turn=agent_turn,
         embedding=_make_embedding(),
         **kwargs,
     )
@@ -35,43 +35,43 @@ class TestInsert:
         assert mid > 0
 
 
-class TestFindByQA:
+class TestFindByTurns:
     def test_find_existing(self, db_conn):
         insert_memory(db_conn, _make_memory())
-        result = find_memory_by_qa(db_conn, "Q", "A")
+        result = find_memory_by_turns(db_conn, "U", "A")
         assert result is not None
-        assert result.question == "Q"
-        assert result.answer == "A"
+        assert result.user_turn == "U"
+        assert result.agent_turn == "A"
 
     def test_find_nonexistent(self, db_conn):
-        assert find_memory_by_qa(db_conn, "Q", "A") is None
+        assert find_memory_by_turns(db_conn, "U", "A") is None
 
     def test_find_with_project_path(self, db_conn):
         insert_memory(db_conn, _make_memory(project_path="/proj"))
-        assert find_memory_by_qa(db_conn, "Q", "A", project_path="/proj") is not None
-        assert find_memory_by_qa(db_conn, "Q", "A", project_path="/other") is None
+        assert find_memory_by_turns(db_conn, "U", "A", project_path="/proj") is not None
+        assert find_memory_by_turns(db_conn, "U", "A", project_path="/other") is None
 
 
 class TestUpdateMemory:
-    def test_update_created_at(self, db_conn):
+    def test_update_last_accessed_at(self, db_conn):
         insert_memory(db_conn, _make_memory())
-        existing = find_memory_by_qa(db_conn, "Q", "A")
+        existing = find_memory_by_turns(db_conn, "U", "A")
         updated = Memory(
             id=existing.id,
-            question=existing.question,
-            answer=existing.answer,
-            created_at="2026-01-01T00:00:00",
+            user_turn=existing.user_turn,
+            agent_turn=existing.agent_turn,
+            last_accessed_at="2026-01-01T00:00:00",
             project_path=existing.project_path,
         )
         update_memory(db_conn, updated)
-        result = find_memory_by_qa(db_conn, "Q", "A")
-        assert result.created_at == "2026-01-01T00:00:00"
+        result = find_memory_by_turns(db_conn, "U", "A")
+        assert result.last_accessed_at == "2026-01-01T00:00:00"
 
 
 class TestFetch:
     def test_fetch_memories_by_ids(self, db_conn):
-        id1 = insert_memory(db_conn, _make_memory("s1", "Q1", "A1"))
-        id2 = insert_memory(db_conn, _make_memory("s1", "Q2", "A2"))
+        id1 = insert_memory(db_conn, _make_memory("s1", "U1", "A1"))
+        id2 = insert_memory(db_conn, _make_memory("s1", "U2", "A2"))
         memories = fetch_memories_by_ids(db_conn, [id1, id2])
         assert len(memories) == 2
         assert all(isinstance(m, Memory) for m in memories)
@@ -81,10 +81,10 @@ class TestFetch:
 
     def test_fetch_with_project_filter(self, db_conn):
         id1 = insert_memory(
-            db_conn, _make_memory("s1", "Q1", "A1", project_path="/proj")
+            db_conn, _make_memory("s1", "U1", "A1", project_path="/proj")
         )
         id2 = insert_memory(
-            db_conn, _make_memory("s1", "Q2", "A2", project_path="/other")
+            db_conn, _make_memory("s1", "U2", "A2", project_path="/other")
         )
         memories = fetch_memories_by_ids(db_conn, [id1, id2], project_path="/proj")
         assert len(memories) == 1
@@ -107,8 +107,8 @@ class TestStats:
         assert s.sessions == 0
 
     def test_after_insert(self, db_conn):
-        insert_memory(db_conn, _make_memory("s1", "Q1", "A1"))
-        insert_memory(db_conn, _make_memory("s2", "Q2", "A2"))
+        insert_memory(db_conn, _make_memory("s1", "U1", "A1"))
+        insert_memory(db_conn, _make_memory("s2", "U2", "A2"))
         s = get_stats(db_conn)
         assert s.memories == 2
         assert s.sessions == 2

@@ -13,9 +13,9 @@ class Memory:
     """記憶のドメインモデル。DBから取得した1件の記憶を表す。"""
 
     id: int
-    question: str
-    answer: str
-    created_at: str
+    user_turn: str
+    agent_turn: str
+    last_accessed_at: str
     project_path: str | None
 
 
@@ -51,35 +51,35 @@ def _init_db(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS memories(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             session_id TEXT NOT NULL,
-            question TEXT NOT NULL,
-            answer TEXT NOT NULL,
+            user_turn TEXT NOT NULL,
+            agent_turn TEXT NOT NULL,
             project_path TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
         CREATE VIRTUAL TABLE IF NOT EXISTS fts_memories USING fts5(
-            question,
-            answer,
+            user_turn,
+            agent_turn,
             content=memories,
             content_rowid=id,
             tokenize='trigram'
         );
 
         CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories BEGIN
-            INSERT INTO fts_memories(rowid, question, answer)
-            VALUES (new.id, new.question, new.answer);
+            INSERT INTO fts_memories(rowid, user_turn, agent_turn)
+            VALUES (new.id, new.user_turn, new.agent_turn);
         END;
 
         CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
-            INSERT INTO fts_memories(fts_memories, rowid, question, answer)
-            VALUES ('delete', old.id, old.question, old.answer);
+            INSERT INTO fts_memories(fts_memories, rowid, user_turn, agent_turn)
+            VALUES ('delete', old.id, old.user_turn, old.agent_turn);
         END;
 
         CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE ON memories BEGIN
-            INSERT INTO fts_memories(fts_memories, rowid, question, answer)
-            VALUES ('delete', old.id, old.question, old.answer);
-            INSERT INTO fts_memories(rowid, question, answer)
-            VALUES (new.id, new.question, new.answer);
+            INSERT INTO fts_memories(fts_memories, rowid, user_turn, agent_turn)
+            VALUES ('delete', old.id, old.user_turn, old.agent_turn);
+            INSERT INTO fts_memories(rowid, user_turn, agent_turn)
+            VALUES (new.id, new.user_turn, new.agent_turn);
         END;
     """)
 

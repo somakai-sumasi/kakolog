@@ -9,25 +9,25 @@ from sqlite_vec import serialize_float32
 from .db import Memory
 
 
-def find_memory_by_qa(
+def find_memory_by_turns(
     conn: sqlite3.Connection,
-    question: str,
-    answer: str,
+    user_turn: str,
+    agent_turn: str,
     project_path: str | None = None,
 ) -> Memory | None:
-    """Q&A+project_pathをキーにメモリを検索する。"""
+    """ユーザー/エージェントターン+project_pathをキーにメモリを検索する。"""
     row = conn.execute(
-        "SELECT id, question, answer, created_at, project_path FROM memories"
-        " WHERE question = ? AND answer = ? AND project_path IS ? LIMIT 1",
-        [question, answer, project_path],
+        "SELECT id, user_turn, agent_turn, last_accessed_at, project_path FROM memories"
+        " WHERE user_turn = ? AND agent_turn = ? AND project_path IS ? LIMIT 1",
+        [user_turn, agent_turn, project_path],
     ).fetchone()
     if row is None:
         return None
     return Memory(
         id=row["id"],
-        question=row["question"],
-        answer=row["answer"],
-        created_at=row["created_at"],
+        user_turn=row["user_turn"],
+        agent_turn=row["agent_turn"],
+        last_accessed_at=row["last_accessed_at"],
         project_path=row["project_path"],
     )
 
@@ -35,11 +35,11 @@ def find_memory_by_qa(
 def update_memory(conn: sqlite3.Connection, memory: Memory) -> None:
     """メモリをIDをキーに更新する。"""
     conn.execute(
-        "UPDATE memories SET question = ?, answer = ?, created_at = ?, project_path = ? WHERE id = ?",
+        "UPDATE memories SET user_turn = ?, agent_turn = ?, last_accessed_at = ?, project_path = ? WHERE id = ?",
         [
-            memory.question,
-            memory.answer,
-            memory.created_at,
+            memory.user_turn,
+            memory.agent_turn,
+            memory.last_accessed_at,
             memory.project_path,
             memory.id,
         ],
@@ -49,23 +49,23 @@ def update_memory(conn: sqlite3.Connection, memory: Memory) -> None:
 @dataclass(frozen=True)
 class MemoryToSave:
     session_id: str
-    question: str
-    answer: str
+    user_turn: str
+    agent_turn: str
     embedding: list[float]
     project_path: str | None = None
-    created_at: str | None = None
+    last_accessed_at: str | None = None
 
 
 def insert_memory(conn: sqlite3.Connection, memory: MemoryToSave) -> int:
     cursor = conn.execute(
-        "INSERT INTO memories(session_id, question, answer, project_path, created_at)"
+        "INSERT INTO memories(session_id, user_turn, agent_turn, project_path, last_accessed_at)"
         " VALUES (?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))",
         [
             memory.session_id,
-            memory.question,
-            memory.answer,
+            memory.user_turn,
+            memory.agent_turn,
             memory.project_path,
-            memory.created_at,
+            memory.last_accessed_at,
         ],
     )
     memory_id = cursor.lastrowid
@@ -105,7 +105,10 @@ def fetch_memories_by_ids(
     if not ids:
         return []
     placeholders = ",".join("?" * len(ids))
-    query_sql = f"SELECT id, question, answer, created_at, project_path FROM memories WHERE id IN ({placeholders})"
+    query_sql = (
+        f"SELECT id, user_turn, agent_turn, last_accessed_at, project_path"
+        f" FROM memories WHERE id IN ({placeholders})"
+    )
     params: list = list(ids)
     if project_path:
         query_sql += " AND project_path = ?"
@@ -114,9 +117,9 @@ def fetch_memories_by_ids(
     return [
         Memory(
             id=row["id"],
-            question=row["question"],
-            answer=row["answer"],
-            created_at=row["created_at"],
+            user_turn=row["user_turn"],
+            agent_turn=row["agent_turn"],
+            last_accessed_at=row["last_accessed_at"],
             project_path=row["project_path"],
         )
         for row in rows

@@ -33,13 +33,13 @@ def _find_mecabrc() -> str | None:
 
 
 @dataclass(frozen=True)
-class QAChunk:
-    question: str
-    answer: str
+class TurnChunk:
+    user_turn: str
+    agent_turn: str
     timestamp: str | None = None
 
     def to_text(self) -> str:
-        return f"{self.question}\n{self.answer}"
+        return f"{self.user_turn}\n{self.agent_turn}"
 
 
 MIN_CHUNK_SIZE = 50
@@ -69,19 +69,19 @@ def has_important_words(text: str) -> bool:
     return False
 
 
-def _is_worth_saving(question: str, answer: str) -> bool:
-    if not question or not answer:
+def _is_worth_saving(user_turn: str, agent_turn: str) -> bool:
+    if not user_turn or not agent_turn:
         return False
-    if is_empty_answer(answer):
+    if is_empty_answer(agent_turn):
         return False
-    if is_trivial(question):
+    if is_trivial(user_turn):
         return False
-    if len(question) + len(answer) < MIN_CHUNK_SIZE:
-        return has_important_words(question + " " + answer)
+    if len(user_turn) + len(agent_turn) < MIN_CHUNK_SIZE:
+        return has_important_words(user_turn + " " + agent_turn)
     return True
 
 
-def chunk_session(transcript_path: str | Path) -> list[QAChunk]:
+def chunk_session(transcript_path: str | Path) -> list[TurnChunk]:
     messages = parse_jsonl(transcript_path)
     pairs = extract_conversations(messages)
 
@@ -90,6 +90,6 @@ def chunk_session(transcript_path: str | Path) -> list[QAChunk]:
         q = clean_text(q)
         a = clean_text(a)
         if _is_worth_saving(q, a):
-            chunks.append(QAChunk(question=q, answer=a, timestamp=ts))
+            chunks.append(TurnChunk(user_turn=q, agent_turn=a, timestamp=ts))
 
     return chunks

@@ -18,11 +18,11 @@ class TestSaveSession:
     def test_save_new_chunks(
         self, mock_meta, mock_excluded, mock_chunk, mock_embed, mock_conn
     ):
-        from kakolog.chunker import QAChunk
+        from kakolog.chunker import TurnChunk
 
         mock_chunk.return_value = [
-            QAChunk(question="Q1", answer="A1"),
-            QAChunk(question="Q2", answer="A2"),
+            TurnChunk(user_turn="U1", agent_turn="A1"),
+            TurnChunk(user_turn="U2", agent_turn="A2"),
         ]
         mock_embed.return_value = [
             np.zeros(EMBEDDING_DIM).tolist(),
@@ -32,7 +32,7 @@ class TestSaveSession:
         mock_conn.return_value.__enter__ = MagicMock(return_value=fake_conn)
         mock_conn.return_value.__exit__ = MagicMock(return_value=False)
 
-        with patch("kakolog.service.find_memory_by_qa", return_value=None):
+        with patch("kakolog.service.find_memory_by_turns", return_value=None):
             with patch("kakolog.service.insert_memory") as mock_insert:
                 from kakolog.service import save_session
 
@@ -81,21 +81,21 @@ class TestSaveSession:
     def test_first_timestamp_passed_to_insert(
         self, mock_meta, mock_excluded, mock_chunk, mock_embed, mock_conn
     ):
-        from kakolog.chunker import QAChunk
+        from kakolog.chunker import TurnChunk
 
-        mock_chunk.return_value = [QAChunk(question="Q", answer="A")]
+        mock_chunk.return_value = [TurnChunk(user_turn="U", agent_turn="A")]
         mock_embed.return_value = [np.zeros(EMBEDDING_DIM).tolist()]
         fake_conn = MagicMock()
         mock_conn.return_value.__enter__ = MagicMock(return_value=fake_conn)
         mock_conn.return_value.__exit__ = MagicMock(return_value=False)
 
-        with patch("kakolog.service.find_memory_by_qa", return_value=None):
+        with patch("kakolog.service.find_memory_by_turns", return_value=None):
             with patch("kakolog.service.insert_memory") as mock_insert:
                 from kakolog.service import save_session
 
                 save_session("sess1", "/path/transcript.jsonl")
 
-        assert mock_insert.call_args[0][1].created_at == "2026-01-15T10:00:00Z"
+        assert mock_insert.call_args[0][1].last_accessed_at == "2026-01-15T10:00:00Z"
 
     @patch("kakolog.service.connection")
     @patch("kakolog.service.embed_documents")
