@@ -133,6 +133,13 @@ stdioで登録するとセッション起動時にポート競合して接続失
 - MeCabのmecabrcはchunker.pyが自動検出(`mecab-config` → フォールバックパス)
 - SessionEndフックはバックグラウンドcurl（`&`）で `/hook/save` に転送。Python直接起動だとtransformersのimportで1秒以上かかりhookタイムアウト(SIGINT)に引っかかるため
 
+## MCPツールのdescription指針
+
+- **1〜2文が標準**（公式SDK例: `"""Add two numbers"""` `"""Get weather for a city."""`）
+- パラメータ説明はdescriptionではなくスキーマ（型ヒント・引数）に任せる
+- LLMの行動に影響する場合（クエリの書き方など）は2文目に補足してよい
+- searchツールの場合: 「具体的な語を含む自然言語クエリ」がFTS5+ベクトル両方に効いて最も精度が高い（キーワード列挙はFTSにしか効かず、スコアが約半分になる）
+
 ## TODO
 
 - [ ] チャンクのメタデータ抽出 (ファイルパス、コマンド等)
