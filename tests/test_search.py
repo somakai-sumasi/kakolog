@@ -53,7 +53,9 @@ class TestMmrSelect:
             id=id,
             user_turn=f"U{id}",
             agent_turn=f"A{id}",
+            content=f"U: U{id}\nA: A{id}",
             score=score,
+            created_at=datetime.now().isoformat(),
             last_accessed_at=datetime.now().isoformat(),
             project_path=None,
         )

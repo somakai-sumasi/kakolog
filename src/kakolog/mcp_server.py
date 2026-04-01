@@ -26,16 +26,7 @@ def search(
     """過去のClaude Codeセッション会話を検索する。
     具体的な語を含む自然言語クエリが効果的（例: 「FTS5でどう全文検索を実装したか」）。"""
     results = do_search(query, limit=limit, use_rerank=use_rerank, use_mmr=use_mmr)
-    return [
-        {
-            "user_turn": r.user_turn,
-            "agent_turn": r.agent_turn,
-            "score": r.score,
-            "last_accessed_at": r.last_accessed_at,
-            "project_path": r.project_path,
-        }
-        for r in results
-    ]
+    return [r.to_dict() for r in results]
 
 
 @mcp.tool()

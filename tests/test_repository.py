@@ -5,7 +5,7 @@ from kakolog.repository import (
     MemoryToSave,
     fetch_embeddings_by_ids,
     fetch_memories_by_ids,
-    find_memory_by_turns,
+    find_memory_by_content,
     get_stats,
     insert_memory,
     update_memory,
@@ -20,10 +20,12 @@ def _make_embedding():
 def _make_memory(
     session_id="sess1", user_turn="U", agent_turn="A", **kwargs
 ) -> MemoryToSave:
+    content = kwargs.pop("content", f"U: {user_turn}\nA: {agent_turn}")
     return MemoryToSave(
         session_id=session_id,
         user_turn=user_turn,
         agent_turn=agent_turn,
+        content=content,
         embedding=_make_embedding(),
         **kwargs,
     )
@@ -35,36 +37,41 @@ class TestInsert:
         assert mid > 0
 
 
-class TestFindByTurns:
+class TestFindByContent:
     def test_find_existing(self, db_conn):
         insert_memory(db_conn, _make_memory())
-        result = find_memory_by_turns(db_conn, "U", "A")
+        result = find_memory_by_content(db_conn, "U: U\nA: A")
         assert result is not None
         assert result.user_turn == "U"
         assert result.agent_turn == "A"
+        assert result.content == "U: U\nA: A"
 
     def test_find_nonexistent(self, db_conn):
-        assert find_memory_by_turns(db_conn, "U", "A") is None
+        assert find_memory_by_content(db_conn, "U: U\nA: A") is None
 
     def test_find_with_project_path(self, db_conn):
         insert_memory(db_conn, _make_memory(project_path="/proj"))
-        assert find_memory_by_turns(db_conn, "U", "A", project_path="/proj") is not None
-        assert find_memory_by_turns(db_conn, "U", "A", project_path="/other") is None
+        assert (
+            find_memory_by_content(db_conn, "U: U\nA: A", project_path="/proj") is not None
+        )
+        assert find_memory_by_content(db_conn, "U: U\nA: A", project_path="/other") is None
 
 
 class TestUpdateMemory:
     def test_update_last_accessed_at(self, db_conn):
         insert_memory(db_conn, _make_memory())
-        existing = find_memory_by_turns(db_conn, "U", "A")
+        existing = find_memory_by_content(db_conn, "U: U\nA: A")
         updated = Memory(
             id=existing.id,
             user_turn=existing.user_turn,
             agent_turn=existing.agent_turn,
+            content=existing.content,
+            created_at=existing.created_at,
             last_accessed_at="2026-01-01T00:00:00",
             project_path=existing.project_path,
         )
         update_memory(db_conn, updated)
-        result = find_memory_by_turns(db_conn, "U", "A")
+        result = find_memory_by_content(db_conn, "U: U\nA: A")
         assert result.last_accessed_at == "2026-01-01T00:00:00"
 
 

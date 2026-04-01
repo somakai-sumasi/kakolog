@@ -8,6 +8,11 @@ DEFAULT_DB_PATH = Path.home() / ".kakolog" / "memory.db"
 EMBEDDING_DIM = 256
 
 
+_MEMORY_COLUMNS = (
+    "id, user_turn, agent_turn, content, created_at, last_accessed_at, project_path"
+)
+
+
 @dataclass(frozen=True)
 class Memory:
     """記憶のドメインモデル。DBから取得した1件の記憶を表す。"""
@@ -15,8 +20,22 @@ class Memory:
     id: int
     user_turn: str
     agent_turn: str
+    content: str
+    created_at: str
     last_accessed_at: str
     project_path: str | None
+
+    @classmethod
+    def from_row(cls, row: sqlite3.Row) -> "Memory":
+        return cls(
+            id=row["id"],
+            user_turn=row["user_turn"],
+            agent_turn=row["agent_turn"],
+            content=row["content"],
+            created_at=row["created_at"],
+            last_accessed_at=row["last_accessed_at"],
+            project_path=row["project_path"],
+        )
 
 
 class connection:
@@ -53,33 +72,34 @@ def _init_db(conn: sqlite3.Connection) -> None:
             session_id TEXT NOT NULL,
             user_turn TEXT NOT NULL,
             agent_turn TEXT NOT NULL,
+            content TEXT NOT NULL,
             project_path TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
         CREATE VIRTUAL TABLE IF NOT EXISTS fts_memories USING fts5(
-            user_turn,
-            agent_turn,
+            content,
             content=memories,
             content_rowid=id,
             tokenize='trigram'
         );
 
         CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories BEGIN
-            INSERT INTO fts_memories(rowid, user_turn, agent_turn)
-            VALUES (new.id, new.user_turn, new.agent_turn);
+            INSERT INTO fts_memories(rowid, content)
+            VALUES (new.id, new.content);
         END;
 
         CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
-            INSERT INTO fts_memories(fts_memories, rowid, user_turn, agent_turn)
-            VALUES ('delete', old.id, old.user_turn, old.agent_turn);
+            INSERT INTO fts_memories(fts_memories, rowid, content)
+            VALUES ('delete', old.id, old.content);
         END;
 
         CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE ON memories BEGIN
-            INSERT INTO fts_memories(fts_memories, rowid, user_turn, agent_turn)
-            VALUES ('delete', old.id, old.user_turn, old.agent_turn);
-            INSERT INTO fts_memories(rowid, user_turn, agent_turn)
-            VALUES (new.id, new.user_turn, new.agent_turn);
+            INSERT INTO fts_memories(fts_memories, rowid, content)
+            VALUES ('delete', old.id, old.content);
+            INSERT INTO fts_memories(rowid, content)
+            VALUES (new.id, new.content);
         END;
     """)
 

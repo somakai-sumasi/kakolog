@@ -8,7 +8,7 @@ from datetime import datetime
 import numpy as np
 from sqlite_vec import serialize_float32
 
-from .db import connection
+from .db import Memory, connection
 from .embedder import embed_query
 from .repository import fetch_embeddings_by_ids, fetch_memories_by_ids
 from .reranker import RerankCandidate, rerank
@@ -26,19 +26,47 @@ class SearchResult:
     id: int
     user_turn: str
     agent_turn: str
+    content: str
     score: float
+    created_at: str
     last_accessed_at: str
     project_path: str | None
+
+    @classmethod
+    def from_memory(cls, m: "Memory", score: float) -> "SearchResult":
+        return cls(
+            id=m.id,
+            user_turn=m.user_turn,
+            agent_turn=m.agent_turn,
+            content=m.content,
+            score=score,
+            created_at=m.created_at,
+            last_accessed_at=m.last_accessed_at,
+            project_path=m.project_path,
+        )
 
     def with_score(self, score: float) -> "SearchResult":
         return SearchResult(
             id=self.id,
             user_turn=self.user_turn,
             agent_turn=self.agent_turn,
+            content=self.content,
             score=score,
+            created_at=self.created_at,
             last_accessed_at=self.last_accessed_at,
             project_path=self.project_path,
         )
+
+    def to_dict(self) -> dict:
+        return {
+            "user_turn": self.user_turn,
+            "agent_turn": self.agent_turn,
+            "content": self.content,
+            "score": self.score,
+            "created_at": self.created_at,
+            "last_accessed_at": self.last_accessed_at,
+            "project_path": self.project_path,
+        }
 
 
 def time_decay(
@@ -171,13 +199,12 @@ def mmr_select(
 
 
 def _deduplicate(results: list[SearchResult]) -> list[SearchResult]:
-    """ターンペアの重複を排除"""
-    seen: set[tuple[str, str]] = set()
+    """contentの重複を排除"""
+    seen: set[str] = set()
     deduped = []
     for r in results:
-        key = (r.user_turn, r.agent_turn)
-        if key not in seen:
-            seen.add(key)
+        if r.content not in seen:
+            seen.add(r.content)
             deduped.append(r)
     return deduped
 
@@ -203,13 +230,8 @@ def search(
         memories = fetch_memories_by_ids(conn, all_ids, project_path)
 
         results = [
-            SearchResult(
-                id=m.id,
-                user_turn=m.user_turn,
-                agent_turn=m.agent_turn,
-                score=rrf_scores.get(m.id, 0.0) * time_decay(m.last_accessed_at),
-                last_accessed_at=m.last_accessed_at,
-                project_path=m.project_path,
+            SearchResult.from_memory(
+                m, score=rrf_scores.get(m.id, 0.0) * time_decay(m.last_accessed_at)
             )
             for m in memories
         ]
@@ -219,8 +241,7 @@ def search(
 
         if use_rerank:
             candidates = [
-                RerankCandidate(text=f"{r.user_turn}\n{r.agent_turn}", source=r)
-                for r in deduped[:RERANK_TOP]
+                RerankCandidate(text=r.content, source=r) for r in deduped[:RERANK_TOP]
             ]
             reranked = rerank(query, candidates, top_k=limit)
             deduped = [c.source.with_score(c.rerank_score) for c in reranked]
