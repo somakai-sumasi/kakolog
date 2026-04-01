@@ -24,9 +24,7 @@ def search(
     query: str, limit: int = 5, use_rerank: bool = False, use_mmr: bool = True
 ) -> list[dict]:
     """過去のClaude Codeセッション会話を検索する。
-    キーワード+意味検索のハイブリッド。具体的なキーワードほど精度が高い。
-    use_rerank=Trueでcross-encoderリランキングを有効化（精度向上、速度低下）。
-    use_mmr=TrueでMMR多様性リランキングを有効化（類似結果の重複を削減）。"""
+    具体的な語を含む自然言語クエリが効果的（例: 「FTS5でどう全文検索を実装したか」）。"""
     results = do_search(query, limit=limit, use_rerank=use_rerank, use_mmr=use_mmr)
     return [
         {
