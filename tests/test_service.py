@@ -83,7 +83,9 @@ class TestSaveSession:
     ):
         from kakolog.chunker import TurnChunk
 
-        mock_chunk.return_value = [TurnChunk(user_turn="U", agent_turn="A", content="U: U\nA: A")]
+        mock_chunk.return_value = [
+            TurnChunk(user_turn="U", agent_turn="A", content="U: U\nA: A")
+        ]
         mock_embed.return_value = [np.zeros(EMBEDDING_DIM).tolist()]
         fake_conn = MagicMock()
         mock_conn.return_value.__enter__ = MagicMock(return_value=fake_conn)

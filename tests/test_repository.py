@@ -52,9 +52,12 @@ class TestFindByContent:
     def test_find_with_project_path(self, db_conn):
         insert_memory(db_conn, _make_memory(project_path="/proj"))
         assert (
-            find_memory_by_content(db_conn, "U: U\nA: A", project_path="/proj") is not None
+            find_memory_by_content(db_conn, "U: U\nA: A", project_path="/proj")
+            is not None
         )
-        assert find_memory_by_content(db_conn, "U: U\nA: A", project_path="/other") is None
+        assert (
+            find_memory_by_content(db_conn, "U: U\nA: A", project_path="/other") is None
+        )
 
 
 class TestUpdateMemory:
