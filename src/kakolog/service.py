@@ -1,24 +1,11 @@
 """保存・検索のビジネスロジック。server.pyから分離。"""
 
-from pathlib import Path
-
 from .chunker import chunk_session
-from .config import is_excluded
+from .config import is_excluded, is_excluded_session
 from .db import transaction
 from .embedder import embed_documents
 from .repository import MemoryToSave, find_memory_by_content, insert_memory
 from .transcript import read_session_meta
-
-_EXCLUDED_ENTRYPOINTS = frozenset({"sdk-cli"})
-_EXCLUDED_PATH_PARTS = frozenset({"subagents"})
-
-
-def is_excluded_session(transcript_path: str, entrypoint: str | None) -> bool:
-    if any(part in _EXCLUDED_PATH_PARTS for part in Path(transcript_path).parts):
-        return True
-    if entrypoint in _EXCLUDED_ENTRYPOINTS:
-        return True
-    return False
 
 
 def save_session(
