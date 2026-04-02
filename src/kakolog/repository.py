@@ -1,5 +1,6 @@
 """メモリのデータ操作（CRUD）"""
 
+import sqlite3
 from dataclasses import dataclass
 
 import numpy as np
@@ -153,7 +154,7 @@ def search_fts(
             ).fetchall()
             for r in rows:
                 doc_hits[r[0]] = doc_hits.get(r[0], 0) + 1
-        except Exception:
+        except sqlite3.OperationalError:
             continue
 
     sorted_ids = sorted(
