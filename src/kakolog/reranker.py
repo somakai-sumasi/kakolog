@@ -3,11 +3,13 @@
 import functools
 import platform
 from dataclasses import dataclass
-from typing import Any
+from typing import Generic, TypeVar
 
 from sentence_transformers import CrossEncoder
 
 MODEL_NAME = "hotchpotch/japanese-reranker-tiny-v2"
+
+T = TypeVar("T")
 
 
 def _onnx_file_name() -> str:
@@ -18,9 +20,9 @@ def _onnx_file_name() -> str:
 
 
 @dataclass(frozen=True)
-class RerankCandidate:
+class RerankCandidate(Generic[T]):
     text: str
-    source: Any
+    source: T
     rerank_score: float = 0.0
 
 
@@ -37,8 +39,8 @@ def get_reranker() -> CrossEncoder:
 
 
 def rerank(
-    query: str, candidates: list[RerankCandidate], top_k: int = 10
-) -> list[RerankCandidate]:
+    query: str, candidates: list[RerankCandidate[T]], top_k: int = 10
+) -> list[RerankCandidate[T]]:
     """RRF後の候補をリランキングする。新しいリストを返す。"""
     if not candidates:
         return []
