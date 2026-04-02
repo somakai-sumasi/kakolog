@@ -21,8 +21,8 @@ class TestSaveSession:
         from kakolog.chunker import TurnChunk
 
         mock_chunk.return_value = [
-            TurnChunk(user_turn="U1", agent_turn="A1"),
-            TurnChunk(user_turn="U2", agent_turn="A2"),
+            TurnChunk(user_turn="U1", agent_turn="A1", content="U: U1\nA: A1"),
+            TurnChunk(user_turn="U2", agent_turn="A2", content="U: U2\nA: A2"),
         ]
         mock_embed.return_value = [
             np.zeros(EMBEDDING_DIM).tolist(),
@@ -32,7 +32,7 @@ class TestSaveSession:
         mock_conn.return_value.__enter__ = MagicMock(return_value=fake_conn)
         mock_conn.return_value.__exit__ = MagicMock(return_value=False)
 
-        with patch("kakolog.service.find_memory_by_turns", return_value=None):
+        with patch("kakolog.service.find_memory_by_content", return_value=None):
             with patch("kakolog.service.insert_memory") as mock_insert:
                 from kakolog.service import save_session
 
@@ -83,13 +83,15 @@ class TestSaveSession:
     ):
         from kakolog.chunker import TurnChunk
 
-        mock_chunk.return_value = [TurnChunk(user_turn="U", agent_turn="A")]
+        mock_chunk.return_value = [
+            TurnChunk(user_turn="U", agent_turn="A", content="U: U\nA: A")
+        ]
         mock_embed.return_value = [np.zeros(EMBEDDING_DIM).tolist()]
         fake_conn = MagicMock()
         mock_conn.return_value.__enter__ = MagicMock(return_value=fake_conn)
         mock_conn.return_value.__exit__ = MagicMock(return_value=False)
 
-        with patch("kakolog.service.find_memory_by_turns", return_value=None):
+        with patch("kakolog.service.find_memory_by_content", return_value=None):
             with patch("kakolog.service.insert_memory") as mock_insert:
                 from kakolog.service import save_session
 

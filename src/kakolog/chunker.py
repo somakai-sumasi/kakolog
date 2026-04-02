@@ -36,14 +36,19 @@ def _find_mecabrc() -> str | None:
 class TurnChunk:
     user_turn: str
     agent_turn: str
+    content: str
     timestamp: str | None = None
 
-    def to_text(self) -> str:
-        return f"{self.user_turn}\n{self.agent_turn}"
 
-
+SHORT_USER_THRESHOLD = 30
+MAX_MERGE_TURNS = 3
+AGENT_TRUNCATE_LEN = 200
 MIN_CHUNK_SIZE = 50
 WCOST_THRESHOLD = 6000  # これ以上のコストの名詞は「珍しい語」と判定
+
+
+def _format_content(user_turn: str, agent_turn: str) -> str:
+    return f"U: {user_turn}\nA: {agent_turn}"
 
 
 @functools.lru_cache(maxsize=1)
@@ -81,15 +86,71 @@ def _is_worth_saving(user_turn: str, agent_turn: str) -> bool:
     return True
 
 
+def _merge_short_turns(
+    pairs: list[tuple[str, str, str | None]],
+) -> list[TurnChunk]:
+    """短いuser_turnが連続する場合、U+A+U+A交互のまま統合する。
+
+    user_turn: 最初のユーザー発言（表示用）
+    agent_turn: 最後のagent応答（表示用）
+    content: U+A+U+A交互の全文（embedding・FTS用）
+    """
+    chunks: list[TurnChunk] = []
+    i = 0
+
+    while i < len(pairs):
+        q, a, ts = pairs[i]
+        if not _is_worth_saving(q, a):
+            i += 1
+            continue
+
+        if len(q) <= SHORT_USER_THRESHOLD:
+            group = [(q, a, ts)]
+            j = i + 1
+            while (
+                j < len(pairs)
+                and len(pairs[j][0]) <= SHORT_USER_THRESHOLD
+                and _is_worth_saving(pairs[j][0], pairs[j][1])
+                and len(group) < MAX_MERGE_TURNS
+            ):
+                group.append(pairs[j])
+                j += 1
+
+            if len(group) > 1:
+                first_user = group[0][0]
+                last_agent = group[-1][1]
+                parts = [
+                    _format_content(gq, ga[:AGENT_TRUNCATE_LEN]) for gq, ga, _ in group
+                ]
+                chunks.append(
+                    TurnChunk(
+                        user_turn=first_user,
+                        agent_turn=last_agent,
+                        content="\n\n".join(parts),
+                        timestamp=ts,
+                    )
+                )
+                i = j
+                continue
+
+        chunks.append(
+            TurnChunk(
+                user_turn=q, agent_turn=a, content=_format_content(q, a), timestamp=ts
+            )
+        )
+        i += 1
+
+    return chunks
+
+
 def chunk_session(transcript_path: str | Path) -> list[TurnChunk]:
     messages = parse_jsonl(transcript_path)
     pairs = extract_conversations(messages)
 
-    chunks = []
+    cleaned = []
     for q, a, ts in pairs:
         q = clean_text(q)
         a = clean_text(a)
-        if _is_worth_saving(q, a):
-            chunks.append(TurnChunk(user_turn=q, agent_turn=a, timestamp=ts))
+        cleaned.append((q, a, ts))
 
-    return chunks
+    return _merge_short_turns(cleaned)

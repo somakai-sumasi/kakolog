@@ -40,7 +40,7 @@ def main():
 
     p_search = sub.add_parser("search", help="Search memories")
     p_search.add_argument("query", help="Search query")
-    p_search.add_argument("-n", "--limit", type=int, default=5)
+    p_search.add_argument("-n", "--limit", type=int, default=10)
     p_search.add_argument("-p", "--project", default=None)
     p_search.add_argument(
         "--rerank", action="store_true", help="Enable cross-encoder reranking"

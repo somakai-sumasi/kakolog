@@ -4,9 +4,9 @@ from pathlib import Path
 
 from .chunker import chunk_session
 from .config import is_excluded
-from .db import Memory, connection
+from .db import connection
 from .embedder import embed_documents
-from .repository import MemoryToSave, find_memory_by_turns, insert_memory, update_memory
+from .repository import MemoryToSave, find_memory_by_content, insert_memory
 from .transcript import read_session_meta
 
 _EXCLUDED_ENTRYPOINTS = frozenset({"sdk-cli"})
@@ -34,29 +34,17 @@ def save_session(
     if not chunks:
         return 0
 
-    texts = [c.to_text() for c in chunks]
+    texts = [c.content for c in chunks]
     embeddings = embed_documents(texts)
 
     with connection() as conn:
         count = 0
         for chunk, emb in zip(chunks, embeddings):
             ts = chunk.timestamp or meta.first_timestamp
-            existing = find_memory_by_turns(
-                conn, chunk.user_turn, chunk.agent_turn, resolved_project_path
+            existing = find_memory_by_content(
+                conn, chunk.content, resolved_project_path
             )
             if existing:
-                update_memory(
-                    conn,
-                    Memory(
-                        id=existing.id,
-                        user_turn=existing.user_turn,
-                        agent_turn=existing.agent_turn,
-                        last_accessed_at=ts
-                        if ts is not None
-                        else existing.last_accessed_at,
-                        project_path=existing.project_path,
-                    ),
-                )
                 continue
             insert_memory(
                 conn,
@@ -64,6 +52,7 @@ def save_session(
                     session_id=session_id,
                     user_turn=chunk.user_turn,
                     agent_turn=chunk.agent_turn,
+                    content=chunk.content,
                     embedding=emb,
                     project_path=resolved_project_path,
                     last_accessed_at=ts,

@@ -38,12 +38,12 @@ MCPサーバー（streamable-http）方式。launchdで常駐起動し、Claude 
 ```
 src/kakolog/
 ├── mcp_server.py   # MCPサーバー (FastMCP, streamable-http, port 7377)
-├── service.py      # 保存ビジネスロジック (重複チェック+保存オーケストレーション)
+├── service.py      # 保存ビジネスロジック (重複スキップ+保存オーケストレーション)
 ├── search.py       # ハイブリッド検索 (FTS5 + vec → RRF → MMR → Reranking)
 ├── reranker.py     # japanese-reranker-tiny-v2 (ONNX int8, Cross-Encoder)
-├── repository.py   # メモリのデータ操作 (CRUD)
+├── repository.py   # メモリのデータ操作 (挿入・検索・統計)
 ├── db.py           # SQLite接続 (Context Manager) ・スキーマ管理
-├── chunker.py      # JSONL→TurnChunk分割 (ノイズフィルタ+MeCab重要語判定)
+├── chunker.py      # JSONL→TurnChunk分割 (ノイズフィルタ+MeCab重要語判定+短ターン統合)
 ├── embedder.py     # Ruri v3-30m (CPU, 256次元)
 ├── cli.py          # 手動検索・stats用CLI
 ├── bulk_import.py  # 過去セッション一括インポート
@@ -116,14 +116,16 @@ stdioで登録するとセッション起動時にポート競合して接続失
 
 詳細はREADME.mdを参照。概要:
 
-- **チャンク分割**: agentターン結合 → ノイズ除去 → MeCab wcost重要語判定(閾値6000) → 重複排除
-- **検索**: FTS5 + sqlite-vec → RRF(k=60) × 時間減衰(30日半減期) → MMR(λ=0.7) → [オプション] Reranking
+- **チャンク分割**: agentターン結合 → ノイズ除去 → MeCab wcost重要語判定(閾値6000) → 短ターン統合(user≤30字が連続→最大3ターンをU+A交互で1チャンクに) → 重複排除
+- **検索**: FTS5(`content`) + sqlite-vec → RRF(k=60) × 時間減衰(30日半減期) → MMR(λ=0.7) → [オプション] Reranking
 
 ## データモデル
 
-- `Memory`, `Stats`, `SearchResult` は全て `frozen=True` の dataclass。`sqlite3.Row`は使わない
+- `Memory`, `Stats`, `SearchResult` は全て `frozen=True` の dataclass
+- `Memory.from_row(row)` でsqlite3.Row→Memory変換を集約。`SearchResult.from_memory(m, score)` でMemory→SearchResult変換を集約
 - `init_db()` は `connection.__enter__` に統合済み。個別呼び出し不要
-- DBカラムは `user_turn`/`agent_turn`/`last_accessed_at`
+- DBカラムは `user_turn`(表示用) / `agent_turn`(表示用) / `content`(embedding・FTS用全文) / `created_at` / `last_accessed_at`
+- `content` のフォーマットは `U: {user}\nA: {agent}` で統一（`_format_content()` で生成）。統合チャンクは `\n\n` 区切りで複数ペアを連結
 
 ## Gotchas
 
