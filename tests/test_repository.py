@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import numpy as np
 
 from kakolog.db import EMBEDDING_DIM
@@ -71,12 +73,12 @@ class TestUpdateMemory:
             agent_turn=existing.agent_turn,
             content=existing.content,
             created_at=existing.created_at,
-            last_accessed_at="2026-01-01T00:00:00",
+            last_accessed_at=datetime(2026, 1, 1),
             project_path=existing.project_path,
         )
         update_memory(updated)
         result = find_memory_by_content("U: U\nA: A")
-        assert result.last_accessed_at == "2026-01-01T00:00:00"
+        assert result.last_accessed_at == datetime(2026, 1, 1)
 
 
 class TestFetch:

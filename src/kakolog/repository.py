@@ -39,7 +39,7 @@ def update_memory(memory: Memory) -> None:
             memory.user_turn,
             memory.agent_turn,
             memory.content,
-            memory.last_accessed_at,
+            memory.last_accessed_at.isoformat(),
             memory.project_path,
             memory.id,
         ],

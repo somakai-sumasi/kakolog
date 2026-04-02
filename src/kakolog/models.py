@@ -1,15 +1,31 @@
 """ドメインモデル定義。"""
 
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
+from datetime import datetime
 from typing import TypeVar
 
 T = TypeVar("T")
 
 
+def _parse_timestamp(value: str | None) -> datetime | None:
+    """DB格納形式の文字列をdatetimeに変換する。"""
+    if value is None:
+        return None
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
 def from_row(row: sqlite3.Row, model_cls: type[T]) -> T:
-    """sqlite3.Row を dataclass に変換する。"""
-    return model_cls(**{f: row[f] for f in model_cls.__dataclass_fields__})
+    """sqlite3.Row を dataclass に変換する。
+    datetime型フィールドは文字列から自動変換する。"""
+    hints = {f.name: f.type for f in fields(model_cls)}
+    values = {}
+    for f in model_cls.__dataclass_fields__:
+        v = row[f]
+        if hints[f] is datetime and isinstance(v, str):
+            v = _parse_timestamp(v)
+        values[f] = v
+    return model_cls(**values)
 
 
 def columns_of(model_cls: type) -> str:
@@ -34,8 +50,8 @@ class Memory:
     user_turn: str
     agent_turn: str
     content: str
-    created_at: str
-    last_accessed_at: str
+    created_at: datetime
+    last_accessed_at: datetime
     project_path: str | None
 
 
@@ -48,8 +64,8 @@ class SearchResult:
     agent_turn: str
     content: str
     score: float
-    created_at: str
-    last_accessed_at: str
+    created_at: datetime
+    last_accessed_at: datetime
     project_path: str | None
 
     @classmethod
@@ -83,7 +99,7 @@ class SearchResult:
             "agent_turn": self.agent_turn,
             "content": self.content,
             "score": self.score,
-            "created_at": self.created_at,
-            "last_accessed_at": self.last_accessed_at,
+            "created_at": self.created_at.isoformat(),
+            "last_accessed_at": self.last_accessed_at.isoformat(),
             "project_path": self.project_path,
         }

@@ -24,11 +24,8 @@ SECONDS_PER_DAY = 86400
 
 
 def time_decay(
-    last_accessed_at_str: str, half_life_days: float = HALF_LIFE_DAYS
+    last_accessed_at: datetime, half_life_days: float = HALF_LIFE_DAYS
 ) -> float:
-    last_accessed_at = datetime.fromisoformat(
-        last_accessed_at_str.replace("Z", "+00:00")
-    )
     now = (
         datetime.now(last_accessed_at.tzinfo)
         if last_accessed_at.tzinfo

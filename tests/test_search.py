@@ -13,15 +13,15 @@ from kakolog.search import (
 
 class TestTimeDecay:
     def test_now_returns_one(self):
-        now = datetime.now().isoformat()
+        now = datetime.now()
         assert abs(time_decay(now) - 1.0) < 0.01
 
     def test_half_life(self):
-        t = (datetime.now() - timedelta(days=30)).isoformat()
+        t = datetime.now() - timedelta(days=30)
         assert abs(time_decay(t) - 0.5) < 0.05
 
     def test_old_date_decays(self):
-        t = (datetime.now() - timedelta(days=90)).isoformat()
+        t = datetime.now() - timedelta(days=90)
         assert time_decay(t) < 0.2
 
 
@@ -55,8 +55,8 @@ class TestMmrSelect:
             agent_turn=f"A{id}",
             content=f"U: U{id}\nA: A{id}",
             score=score,
-            created_at=datetime.now().isoformat(),
-            last_accessed_at=datetime.now().isoformat(),
+            created_at=datetime.now(),
+            last_accessed_at=datetime.now(),
             project_path=None,
         )
 
