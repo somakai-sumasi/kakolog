@@ -7,10 +7,8 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from .config import add_exclude_path, get_exclude_paths, remove_exclude_path
-from .db import connection
-from .embedder import get_model
 from .repository import get_stats
-from .search import search as do_search
+from .search import search as _search
 from .service import save_session
 
 HOST = "127.0.0.1"
@@ -25,7 +23,9 @@ def search(
 ) -> list[dict]:
     """過去のClaude Codeセッション会話を検索する。
     具体的な語を含む自然言語クエリが効果的（例: 「FTS5でどう全文検索を実装したか」）。"""
-    results = do_search(query, limit=limit, use_rerank=use_rerank, use_mmr=use_mmr)
+    results = _search(
+        query, limit=limit, use_rerank=use_rerank, use_mmr=use_mmr
+    )
     return [r.to_dict() for r in results]
 
 
@@ -41,9 +41,8 @@ def save(
 @mcp.tool()
 def stats() -> dict:
     """メモリの統計情報を返す。"""
-    with connection() as conn:
-        s = get_stats(conn)
-        return {"memories": s.memories, "sessions": s.sessions}
+    s = get_stats()
+    return {"memories": s.memories, "sessions": s.sessions}
 
 
 @mcp.custom_route("/hook/save", methods=["POST"])
@@ -52,9 +51,12 @@ async def hook_save(request: Request) -> JSONResponse:
     data = await request.json()
     if not data.get("session_id") or not data.get("transcript_path"):
         return JSONResponse(
-            {"error": "session_id and transcript_path are required"}, status_code=400
+            {"error": "session_id and transcript_path are required"},
+            status_code=400,
         )
-    count = save_session(data["session_id"], data["transcript_path"], data.get("cwd"))
+    count = save_session(
+        data["session_id"], data["transcript_path"], data.get("cwd")
+    )
     return JSONResponse({"saved": count, "session_id": data["session_id"]})
 
 
@@ -76,14 +78,18 @@ def exclude_remove(path: str) -> list[str]:
     return remove_exclude_path(path)
 
 
-def main():
-    print("[kakolog] Loading models...", file=sys.stderr)
+def _warmup():
+    """初回リクエスト遅延を避けるためモデルとDBを先行初期化。"""
+    from .db import get_conn
+    from .embedder import get_model
+
     get_model()
-    print("[kakolog] Model loaded. Starting MCP server.", file=sys.stderr)
+    get_conn()
 
-    with connection():
-        pass  # init_db is called automatically
 
+def main():
+    print("[kakolog] Warming up...", file=sys.stderr)
+    _warmup()
     print(f"[kakolog] MCP server on {HOST}:{PORT}", file=sys.stderr)
     mcp.run(transport="streamable-http")
 

@@ -4,7 +4,7 @@ import sys
 import time
 from pathlib import Path
 
-from .db import connection
+from .db import get_conn
 from .embedder import get_model
 from .repository import get_existing_session_ids
 from .service import save_session
@@ -20,9 +20,9 @@ def bulk_import(claude_projects_dir: Path | None = None):
     print("Loading model...", file=sys.stderr)
     get_model()
 
-    with connection() as conn:
-        existing = get_existing_session_ids(conn)
-        print(f"Already imported: {len(existing)} sessions", file=sys.stderr)
+    get_conn()  # ensure DB is initialized
+    existing = get_existing_session_ids()
+    print(f"Already imported: {len(existing)} sessions", file=sys.stderr)
 
     total_memories = 0
     total_sessions = 0

@@ -7,7 +7,7 @@ from kakolog.transcript import SessionMeta
 
 
 class TestSaveSession:
-    @patch("kakolog.service.connection")
+    @patch("kakolog.service.transaction")
     @patch("kakolog.service.embed_documents")
     @patch("kakolog.service.chunk_session")
     @patch("kakolog.service.is_excluded", return_value=False)
@@ -68,7 +68,7 @@ class TestSaveSession:
         count = save_session("sess1", "/path", project_path="/excluded")
         assert count == 0
 
-    @patch("kakolog.service.connection")
+    @patch("kakolog.service.transaction")
     @patch("kakolog.service.embed_documents")
     @patch("kakolog.service.chunk_session")
     @patch("kakolog.service.is_excluded", return_value=False)
@@ -97,9 +97,9 @@ class TestSaveSession:
 
                 save_session("sess1", "/path/transcript.jsonl")
 
-        assert mock_insert.call_args[0][1].last_accessed_at == "2026-01-15T10:00:00Z"
+        assert mock_insert.call_args[0][0].last_accessed_at == "2026-01-15T10:00:00Z"
 
-    @patch("kakolog.service.connection")
+    @patch("kakolog.service.transaction")
     @patch("kakolog.service.embed_documents")
     @patch("kakolog.service.chunk_session")
     @patch("kakolog.service.is_excluded", return_value=False)

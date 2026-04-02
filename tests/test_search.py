@@ -3,8 +3,8 @@ from datetime import datetime, timedelta
 import numpy as np
 
 from kakolog.db import EMBEDDING_DIM
+from kakolog.models import SearchResult
 from kakolog.search import (
-    SearchResult,
     mmr_select,
     rrf_fuse,
     time_decay,

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from .chunker import chunk_session
 from .config import is_excluded
-from .db import connection
+from .db import transaction
 from .embedder import embed_documents
 from .repository import MemoryToSave, find_memory_by_content, insert_memory
 from .transcript import read_session_meta
@@ -37,17 +37,16 @@ def save_session(
     texts = [c.content for c in chunks]
     embeddings = embed_documents(texts)
 
-    with connection() as conn:
+    with transaction():
         count = 0
         for chunk, emb in zip(chunks, embeddings):
             ts = chunk.timestamp or meta.first_timestamp
             existing = find_memory_by_content(
-                conn, chunk.content, resolved_project_path
+                chunk.content, resolved_project_path
             )
             if existing:
                 continue
             insert_memory(
-                conn,
                 MemoryToSave(
                     session_id=session_id,
                     user_turn=chunk.user_turn,
