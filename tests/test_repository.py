@@ -54,13 +54,8 @@ class TestFindByContent:
 
     def test_find_with_project_path(self, db_conn):
         insert_memory(_make_memory(project_path="/proj"))
-        assert (
-            find_memory_by_content("U: U\nA: A", project_path="/proj")
-            is not None
-        )
-        assert (
-            find_memory_by_content("U: U\nA: A", project_path="/other") is None
-        )
+        assert find_memory_by_content("U: U\nA: A", project_path="/proj") is not None
+        assert find_memory_by_content("U: U\nA: A", project_path="/other") is None
 
 
 class TestUpdateMemory:
@@ -93,12 +88,8 @@ class TestFetch:
         assert fetch_memories_by_ids([]) == []
 
     def test_fetch_with_project_filter(self, db_conn):
-        id1 = insert_memory(
-            _make_memory("s1", "U1", "A1", project_path="/proj")
-        )
-        id2 = insert_memory(
-            _make_memory("s1", "U2", "A2", project_path="/other")
-        )
+        id1 = insert_memory(_make_memory("s1", "U1", "A1", project_path="/proj"))
+        id2 = insert_memory(_make_memory("s1", "U2", "A2", project_path="/other"))
         memories = fetch_memories_by_ids([id1, id2], project_path="/proj")
         assert len(memories) == 1
         assert memories[0].project_path == "/proj"

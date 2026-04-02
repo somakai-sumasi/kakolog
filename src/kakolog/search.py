@@ -142,14 +142,10 @@ def search(
     query_embedding = embed_query(query)
     terms = _build_search_terms(query)
 
-    keyword_ids, keyword_term_hits = (
-        search_fts(terms) if terms else ([], {})
-    )
+    keyword_ids, keyword_term_hits = search_fts(terms) if terms else ([], {})
     vector_ids = search_vec(query_embedding)
 
-    rrf_scores = rrf_fuse(
-        keyword_ids, vector_ids, keyword_term_hits, len(terms)
-    )
+    rrf_scores = rrf_fuse(keyword_ids, vector_ids, keyword_term_hits, len(terms))
     if not rrf_scores:
         return []
 
@@ -169,8 +165,7 @@ def search(
 
     if use_rerank:
         candidates = [
-            RerankCandidate(text=r.content, source=r)
-            for r in deduped[:RERANK_TOP]
+            RerankCandidate(text=r.content, source=r) for r in deduped[:RERANK_TOP]
         ]
         reranked = rerank(query, candidates, top_k=limit)
         deduped = [c.source.with_score(c.rerank_score) for c in reranked]

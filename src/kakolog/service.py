@@ -48,9 +48,7 @@ def save_session(
         count = 0
         for chunk, emb in zip(chunks, embeddings):
             ts = chunk.timestamp or meta.first_timestamp
-            existing = find_memory_by_content(
-                chunk.content, resolved_project_path
-            )
+            existing = find_memory_by_content(chunk.content, resolved_project_path)
             if existing:
                 continue
             insert_memory(

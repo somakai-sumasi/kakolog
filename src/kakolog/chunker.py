@@ -118,9 +118,7 @@ def merge_short_turns(
                 first_user = group[0].user_turn
                 last_agent = group[-1].agent_turn
                 parts = [
-                    _format_content(
-                        g.user_turn, g.agent_turn[:AGENT_TRUNCATE_LEN]
-                    )
+                    _format_content(g.user_turn, g.agent_turn[:AGENT_TRUNCATE_LEN])
                     for g in group
                 ]
                 chunks.append(

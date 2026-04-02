@@ -23,9 +23,7 @@ _current_conn: ContextVar[sqlite3.Connection] = ContextVar("_current_conn")
 def _open_conn(db_path: Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
     """DB接続を作成し、拡張ロード+スキーマ初期化を行う。"""
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(
-        str(db_path), detect_types=sqlite3.PARSE_DECLTYPES
-    )
+    conn = sqlite3.connect(str(db_path), detect_types=sqlite3.PARSE_DECLTYPES)
     conn.row_factory = sqlite3.Row
     conn.enable_load_extension(True)
     sqlite_vec.load(conn)

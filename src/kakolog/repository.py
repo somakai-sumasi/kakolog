@@ -84,8 +84,7 @@ def insert_memory(memory: MemoryToSave) -> int:
     memory_id = cursor.lastrowid
     assert memory_id is not None
     conn.execute(
-        "INSERT INTO vec_memories(memory_id, embedding)"
-        " VALUES (?, ?)",
+        "INSERT INTO vec_memories(memory_id, embedding) VALUES (?, ?)",
         [memory_id, serialize_float32(memory.embedding)],
     )
     return memory_id
@@ -98,17 +97,13 @@ class Stats:
 
 
 def get_existing_session_ids() -> set[str]:
-    rows = get_conn().execute(
-        "SELECT DISTINCT session_id FROM memories"
-    ).fetchall()
+    rows = get_conn().execute("SELECT DISTINCT session_id FROM memories").fetchall()
     return {r[0] for r in rows}
 
 
 def get_stats() -> Stats:
     conn = get_conn()
-    memories = conn.execute(
-        "SELECT COUNT(*) FROM memories"
-    ).fetchone()[0]
+    memories = conn.execute("SELECT COUNT(*) FROM memories").fetchone()[0]
     sessions = conn.execute(
         "SELECT COUNT(DISTINCT session_id) FROM memories"
     ).fetchone()[0]
@@ -125,8 +120,7 @@ def fetch_memories_by_ids(
     conn = get_conn()
     placeholders = ",".join("?" * len(ids))
     query_sql = (
-        f"SELECT {columns_of(Memory)}"
-        f" FROM memories WHERE id IN ({placeholders})"
+        f"SELECT {columns_of(Memory)} FROM memories WHERE id IN ({placeholders})"
     )
     params: list = list(ids)
     if project_path:
@@ -146,10 +140,7 @@ def search_fts(
     for term in terms:
         try:
             rows = conn.execute(
-                "SELECT rowid"
-                " FROM fts_memories"
-                " WHERE fts_memories MATCH ?"
-                " LIMIT ?",
+                "SELECT rowid FROM fts_memories WHERE fts_memories MATCH ? LIMIT ?",
                 [term, limit],
             ).fetchall()
             for r in rows:
@@ -157,9 +148,7 @@ def search_fts(
         except sqlite3.OperationalError:
             continue
 
-    sorted_ids = sorted(
-        doc_hits.keys(), key=lambda x: doc_hits[x], reverse=True
-    )
+    sorted_ids = sorted(doc_hits.keys(), key=lambda x: doc_hits[x], reverse=True)
     return sorted_ids[:limit], doc_hits
 
 
@@ -168,12 +157,14 @@ def search_vec(
     limit: int = 50,
 ) -> list[int]:
     """sqlite-vecでベクトル近傍検索を行いIDリストを返す。"""
-    rows = get_conn().execute(
-        "SELECT memory_id"
-        " FROM vec_memories"
-        " WHERE embedding MATCH ? AND k = ?",
-        [serialize_float32(embedding), limit],
-    ).fetchall()
+    rows = (
+        get_conn()
+        .execute(
+            "SELECT memory_id FROM vec_memories WHERE embedding MATCH ? AND k = ?",
+            [serialize_float32(embedding), limit],
+        )
+        .fetchall()
+    )
     return [r[0] for r in rows]
 
 
@@ -184,10 +175,14 @@ def fetch_embeddings_by_ids(
     if not memory_ids:
         return {}
     placeholders = ",".join("?" * len(memory_ids))
-    rows = get_conn().execute(
-        "SELECT memory_id, embedding"
-        " FROM vec_memories"
-        f" WHERE memory_id IN ({placeholders})",
-        memory_ids,
-    ).fetchall()
+    rows = (
+        get_conn()
+        .execute(
+            "SELECT memory_id, embedding"
+            " FROM vec_memories"
+            f" WHERE memory_id IN ({placeholders})",
+            memory_ids,
+        )
+        .fetchall()
+    )
     return {row[0]: np.frombuffer(row[1], dtype=np.float32) for row in rows}
