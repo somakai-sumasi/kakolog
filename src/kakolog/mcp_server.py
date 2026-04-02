@@ -21,7 +21,7 @@ mcp = FastMCP("kakolog", host=HOST, port=PORT)
 
 @mcp.tool()
 def search(
-    query: str, limit: int = 5, use_rerank: bool = False, use_mmr: bool = True
+    query: str, limit: int = 10, use_rerank: bool = False, use_mmr: bool = True
 ) -> list[dict]:
     """過去のClaude Codeセッション会話を検索する。
     具体的な語を含む自然言語クエリが効果的（例: 「FTS5でどう全文検索を実装したか」）。"""
