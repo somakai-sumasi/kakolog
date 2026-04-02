@@ -9,7 +9,7 @@ from kakolog.transcript import SessionMeta
 class TestSaveSession:
     @patch("kakolog.service.transaction")
     @patch("kakolog.service.embed_documents")
-    @patch("kakolog.service.chunk_session")
+    @patch("kakolog.service._build_chunks")
     @patch("kakolog.service.is_excluded", return_value=False)
     @patch(
         "kakolog.service.read_session_meta",
@@ -70,7 +70,7 @@ class TestSaveSession:
 
     @patch("kakolog.service.transaction")
     @patch("kakolog.service.embed_documents")
-    @patch("kakolog.service.chunk_session")
+    @patch("kakolog.service._build_chunks")
     @patch("kakolog.service.is_excluded", return_value=False)
     @patch(
         "kakolog.service.read_session_meta",
@@ -101,7 +101,7 @@ class TestSaveSession:
 
     @patch("kakolog.service.transaction")
     @patch("kakolog.service.embed_documents")
-    @patch("kakolog.service.chunk_session")
+    @patch("kakolog.service._build_chunks")
     @patch("kakolog.service.is_excluded", return_value=False)
     @patch(
         "kakolog.service.read_session_meta",

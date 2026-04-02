@@ -18,6 +18,15 @@ def columns_of(model_cls: type) -> str:
 
 
 @dataclass(frozen=True)
+class ConversationPair:
+    """抽出された1組の会話ペア。"""
+
+    user_turn: str
+    agent_turn: str
+    timestamp: str | None = None
+
+
+@dataclass(frozen=True)
 class Memory:
     """DBから取得した1件の記憶。"""
 

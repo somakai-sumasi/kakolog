@@ -69,10 +69,9 @@ class TestExtractConversations:
         ]
         pairs = extract_conversations(messages)
         assert len(pairs) == 1
-        q, a, ts = pairs[0]
-        assert q == "Q1"
-        assert a == "A1"
-        assert ts is None
+        assert pairs[0].user_turn == "Q1"
+        assert pairs[0].agent_turn == "A1"
+        assert pairs[0].timestamp is None
 
     def test_multiple_pairs(self):
         messages = [
@@ -114,8 +113,8 @@ class TestExtractConversations:
         ]
         pairs = extract_conversations(messages)
         assert len(pairs) == 1
-        assert "調べます" in pairs[0][1]
-        assert "結果はこうです" in pairs[0][1]
+        assert "調べます" in pairs[0].agent_turn
+        assert "結果はこうです" in pairs[0].agent_turn
 
 
 class TestParseJsonl:
@@ -130,9 +129,9 @@ class TestParseJsonl:
         assert len(messages) == 2
 
 
-class TestChunkSession:
+class TestBuildChunks:
     @patch("kakolog.chunker._get_tagger")
-    def test_chunk_session(self, mock_tagger, sample_jsonl):
+    def test_build_chunks(self, mock_tagger, sample_jsonl):
         fake_tagger = MagicMock()
         fake_node = MagicMock()
         fake_node.surface = ""
@@ -140,9 +139,9 @@ class TestChunkSession:
         fake_tagger.parseToNode.return_value = fake_node
         mock_tagger.return_value = fake_tagger
 
-        from kakolog.chunker import chunk_session
+        from kakolog.service import _build_chunks
 
-        chunks = chunk_session(sample_jsonl)
+        chunks = _build_chunks(sample_jsonl)
         assert isinstance(chunks, list)
         for chunk in chunks:
             assert isinstance(chunk, TurnChunk)
