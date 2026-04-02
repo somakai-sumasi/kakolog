@@ -1,36 +1,7 @@
 """ドメインモデル定義。"""
 
-import sqlite3
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from datetime import datetime
-from typing import TypeVar
-
-T = TypeVar("T")
-
-
-def _parse_timestamp(value: str | None) -> datetime | None:
-    """DB格納形式の文字列をdatetimeに変換する。"""
-    if value is None:
-        return None
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
-
-
-def from_row(row: sqlite3.Row, model_cls: type[T]) -> T:
-    """sqlite3.Row を dataclass に変換する。
-    datetime型フィールドは文字列から自動変換する。"""
-    hints = {f.name: f.type for f in fields(model_cls)}
-    values = {}
-    for f in model_cls.__dataclass_fields__:
-        v = row[f]
-        if hints[f] is datetime and isinstance(v, str):
-            v = _parse_timestamp(v)
-        values[f] = v
-    return model_cls(**values)
-
-
-def columns_of(model_cls: type) -> str:
-    """dataclass のフィールド名をSQLカラム列挙文字列として返す。"""
-    return ", ".join(model_cls.__dataclass_fields__)
 
 
 @dataclass(frozen=True)

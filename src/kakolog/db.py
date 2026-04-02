@@ -1,5 +1,6 @@
 import sqlite3
 from contextvars import ContextVar
+from datetime import datetime
 from pathlib import Path
 
 import sqlite_vec
@@ -7,13 +8,24 @@ import sqlite_vec
 DEFAULT_DB_PATH = Path.home() / ".kakolog" / "memory.db"
 EMBEDDING_DIM = 256
 
+
+def _parse_timestamp(val: bytes) -> datetime:
+    """TIMESTAMP型カラムのカスタムコンバータ。"Z"付きISO8601にも対応。"""
+    s = val.decode()
+    return datetime.fromisoformat(s.replace("Z", "+00:00"))
+
+
+sqlite3.register_converter("TIMESTAMP", _parse_timestamp)
+
 _current_conn: ContextVar[sqlite3.Connection] = ContextVar("_current_conn")
 
 
 def _open_conn(db_path: Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
     """DB接続を作成し、拡張ロード+スキーマ初期化を行う。"""
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(db_path))
+    conn = sqlite3.connect(
+        str(db_path), detect_types=sqlite3.PARSE_DECLTYPES
+    )
     conn.row_factory = sqlite3.Row
     conn.enable_load_extension(True)
     sqlite_vec.load(conn)

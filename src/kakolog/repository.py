@@ -6,7 +6,8 @@ import numpy as np
 from sqlite_vec import serialize_float32
 
 from .db import get_conn
-from .models import Memory, columns_of, from_row
+from .db_util import columns_of, from_row
+from .models import Memory
 
 
 def find_memory_by_content(

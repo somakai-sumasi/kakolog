@@ -12,7 +12,9 @@ from kakolog.db import EMBEDDING_DIM, _current_conn, _init_db
 def db_conn():
     """in-memory SQLite + sqlite-vec 拡張付き接続。
     _current_conn にセットするのでrepository関数がそのまま動く。"""
-    conn = sqlite3.connect(":memory:")
+    conn = sqlite3.connect(
+        ":memory:", detect_types=sqlite3.PARSE_DECLTYPES
+    )
     conn.row_factory = sqlite3.Row
     conn.enable_load_extension(True)
     sqlite_vec.load(conn)
