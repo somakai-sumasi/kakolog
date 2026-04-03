@@ -7,7 +7,7 @@ from pathlib import Path
 from .db import get_conn
 from .embedder import get_model
 from .repository import get_existing_session_ids
-from .service import save_session
+from .service.save import save_session
 
 
 def bulk_import(claude_projects_dir: Path | None = None):

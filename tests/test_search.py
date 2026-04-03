@@ -3,8 +3,8 @@ from datetime import datetime, timedelta
 import numpy as np
 
 from kakolog.db import EMBEDDING_DIM
-from kakolog.models import SearchResult
-from kakolog.search import (
+from kakolog.models import Memory, SearchResult
+from kakolog.service.search import (
     mmr_select,
     rrf_fuse,
     time_decay,
@@ -49,17 +49,17 @@ class TestRrfFuse:
 
 class TestMmrSelect:
     def _make_result(self, id: int, score: float) -> SearchResult:
-        return SearchResult(
+        m = Memory(
             id=id,
             user_turn=f"U{id}",
             agent_turn=f"A{id}",
             content=f"U: U{id}\nA: A{id}",
-            score=score,
             created_at=datetime.now(),
             last_accessed_at=datetime.now(),
             access_count=0,
             project_path=None,
         )
+        return SearchResult.from_memory(m, score=score)
 
     def _make_embeddings(self, ids: list[int]) -> dict[int, np.ndarray]:
         embs = {}

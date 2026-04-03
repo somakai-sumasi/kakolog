@@ -42,18 +42,28 @@ def get_conn() -> sqlite3.Connection:
         return conn
 
 
+_tx_depth: ContextVar[int] = ContextVar("_tx_depth", default=0)
+
+
 class transaction:
     """書き込みトランザクション用のContext Manager。
-    正常終了でcommit、例外発生でrollback。"""
+    ネスト対応: 最外側のみcommit/rollbackを実行する。
+    部分ロールバック非対応（SAVEPOINTは使わない）。
+    内側で例外が発生した場合は最外側まで伝播してから全体rollback。"""
 
     def __init__(self):
         self.conn: sqlite3.Connection | None = None
+        self._is_outermost = False
 
     def __enter__(self) -> None:
+        depth = _tx_depth.get()
+        self._is_outermost = depth == 0
+        _tx_depth.set(depth + 1)
         self.conn = get_conn()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.conn:
+        _tx_depth.set(_tx_depth.get() - 1)
+        if self._is_outermost and self.conn:
             if exc_type is None:
                 self.conn.commit()
             else:

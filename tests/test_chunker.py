@@ -139,7 +139,7 @@ class TestBuildChunks:
         fake_tagger.parseToNode.return_value = fake_node
         mock_tagger.return_value = fake_tagger
 
-        from kakolog.service import _build_chunks
+        from kakolog.service.save import _build_chunks
 
         chunks = _build_chunks(sample_jsonl)
         assert isinstance(chunks, list)

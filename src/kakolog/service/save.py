@@ -2,15 +2,23 @@
 
 from pathlib import Path
 
-from .chunker import TurnChunk, merge_short_turns
-from .cleaner import clean_text
-from .config import is_excluded, is_excluded_session
-from .db import transaction
-from .embedder import embed_documents
-from .extractor import extract_conversations
-from .models import ConversationPair
-from .repository import MemoryToSave, find_memory_by_content, insert_memory
-from .transcript import parse_jsonl, read_session_meta
+from ..chunker import TurnChunk, merge_short_turns
+from ..cleaner import clean_text
+from ..config import SIMILARITY_THRESHOLD, is_excluded, is_excluded_session
+from ..db import transaction
+from ..embedder import cosine_similarity, embed_documents
+from ..extractor import extract_conversations, read_session_meta
+from ..models import ConversationPair, Memory
+from ..repository import (
+    MemoryToSave,
+    fetch_embeddings_by_ids,
+    fetch_memories_by_ids,
+    find_memory_by_content,
+    insert_memory,
+    search_vec,
+)
+from ..transcript import parse_jsonl
+from . import touch_memories
 
 
 def _build_chunks(transcript_path: str | Path) -> list[TurnChunk]:
@@ -51,6 +59,10 @@ def save_session(
             existing = find_memory_by_content(chunk.content, resolved_project_path)
             if existing:
                 continue
+            similar = _find_similar(emb, resolved_project_path)
+            if similar:
+                touch_memories([similar])
+                continue
             insert_memory(
                 MemoryToSave(
                     session_id=session_id,
@@ -65,3 +77,23 @@ def save_session(
             count += 1
 
     return count
+
+
+def _find_similar(
+    embedding: list[float],
+    project_path: str | None,
+) -> Memory | None:
+    """同一project_path内で類似度がSIMILARITY_THRESHOLD以上のメモリを返す。"""
+    candidate_ids = search_vec(embedding, limit=5)
+    if not candidate_ids:
+        return None
+    memories = fetch_memories_by_ids(candidate_ids, project_path)
+    if not memories:
+        return None
+    emb_map = fetch_embeddings_by_ids([m.id for m in memories])
+    for m in memories:
+        if m.id not in emb_map:
+            continue
+        if cosine_similarity(embedding, emb_map[m.id]) >= SIMILARITY_THRESHOLD:
+            return m
+    return None

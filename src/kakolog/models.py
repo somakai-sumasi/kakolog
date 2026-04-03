@@ -1,6 +1,6 @@
 """ドメインモデル定義。"""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 
 
@@ -10,7 +10,7 @@ class ConversationPair:
 
     user_turn: str
     agent_turn: str
-    timestamp: str | None = None
+    timestamp: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -29,53 +29,39 @@ class Memory:
 
 @dataclass(frozen=True)
 class SearchResult:
-    """検索結果1件。スコア付きの記憶。"""
+    """検索結果1件。Memoryにスコアを付与したラッパー。"""
 
-    id: int
-    user_turn: str
-    agent_turn: str
-    content: str
+    memory: Memory
     score: float
-    created_at: datetime
-    last_accessed_at: datetime
-    access_count: int
-    project_path: str | None
 
     @classmethod
     def from_memory(cls, m: Memory, score: float) -> "SearchResult":
-        return cls(
-            id=m.id,
-            user_turn=m.user_turn,
-            agent_turn=m.agent_turn,
-            content=m.content,
-            score=score,
-            created_at=m.created_at,
-            last_accessed_at=m.last_accessed_at,
-            access_count=m.access_count,
-            project_path=m.project_path,
-        )
+        return cls(memory=m, score=score)
 
     def with_score(self, score: float) -> "SearchResult":
-        return SearchResult(
-            id=self.id,
-            user_turn=self.user_turn,
-            agent_turn=self.agent_turn,
-            content=self.content,
-            score=score,
-            created_at=self.created_at,
-            last_accessed_at=self.last_accessed_at,
-            access_count=self.access_count,
-            project_path=self.project_path,
-        )
+        return replace(self, score=score)
+
+    @property
+    def id(self) -> int:
+        return self.memory.id
 
     def to_dict(self) -> dict:
+        m = self.memory
         return {
-            "user_turn": self.user_turn,
-            "agent_turn": self.agent_turn,
-            "content": self.content,
+            "user_turn": m.user_turn,
+            "agent_turn": m.agent_turn,
+            "content": m.content,
             "score": self.score,
-            "created_at": self.created_at.isoformat(),
-            "last_accessed_at": self.last_accessed_at.isoformat(),
-            "access_count": self.access_count,
-            "project_path": self.project_path,
+            "created_at": m.created_at.isoformat(),
+            "last_accessed_at": m.last_accessed_at.isoformat(),
+            "access_count": m.access_count,
+            "project_path": m.project_path,
         }
+
+
+@dataclass(frozen=True)
+class Stats:
+    """メモリの統計情報。"""
+
+    memories: int
+    sessions: int

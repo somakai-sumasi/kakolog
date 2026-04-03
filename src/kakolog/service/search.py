@@ -1,27 +1,24 @@
 """ハイブリッド検索: FTS5キーワード + vecベクトル → RRF統合 × 時間減衰 → MMR多様性"""
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 import numpy as np
 
-from .embedder import embed_query
-from .models import SearchResult
-from dataclasses import replace
-
-from .db import transaction
-from .repository import (
+from ..db import transaction
+from ..embedder import cosine_similarity, embed_query
+from ..models import SearchResult
+from ..repository import (
     fetch_embeddings_by_ids,
     fetch_memories_by_ids,
     search_fts,
     search_vec,
-    update_memory,
 )
-from .reranker import RerankCandidate, rerank
+from ..reranker import RerankCandidate, rerank
+from . import touch_memories
 
 RRF_K = 60
 HALF_LIFE_DAYS = 30
-TOP_K = 50
 RERANK_TOP = 10
 MMR_LAMBDA = 0.7
 SECONDS_PER_DAY = 86400
@@ -30,12 +27,13 @@ SECONDS_PER_DAY = 86400
 def time_decay(
     last_accessed_at: datetime, half_life_days: float = HALF_LIFE_DAYS
 ) -> float:
-    now = (
-        datetime.now(last_accessed_at.tzinfo)
+    now = datetime.now(timezone.utc)
+    target = (
+        last_accessed_at
         if last_accessed_at.tzinfo
-        else datetime.now()
+        else last_accessed_at.replace(tzinfo=timezone.utc)
     )
-    age_days = (now - last_accessed_at).total_seconds() / SECONDS_PER_DAY
+    age_days = (now - target).total_seconds() / SECONDS_PER_DAY
     return 0.5 ** (age_days / half_life_days)
 
 
@@ -103,14 +101,7 @@ def mmr_select(
                 max_sim = 0.0
             else:
                 cand_vec = embeddings[cand.id]
-                sims = [
-                    float(
-                        np.dot(cand_vec, sv)
-                        / (np.linalg.norm(cand_vec) * np.linalg.norm(sv) + 1e-9)
-                    )
-                    for sv in selected_vecs
-                ]
-                max_sim = max(sims)
+                max_sim = max(cosine_similarity(cand_vec, sv) for sv in selected_vecs)
 
             mmr_score = lambda_param * relevance - (1 - lambda_param) * max_sim
             if mmr_score > best_mmr:
@@ -130,8 +121,8 @@ def _deduplicate(results: list[SearchResult]) -> list[SearchResult]:
     seen: set[str] = set()
     deduped = []
     for r in results:
-        if r.content not in seen:
-            seen.add(r.content)
+        if r.memory.content not in seen:
+            seen.add(r.memory.content)
             deduped.append(r)
     return deduped
 
@@ -169,7 +160,8 @@ def search(
 
     if use_rerank:
         candidates = [
-            RerankCandidate(text=r.content, source=r) for r in deduped[:RERANK_TOP]
+            RerankCandidate(text=r.memory.content, source=r)
+            for r in deduped[:RERANK_TOP]
         ]
         reranked = rerank(query, candidates, top_k=limit)
         deduped = [c.source.with_score(c.rerank_score) for c in reranked]
@@ -181,17 +173,8 @@ def search(
     else:
         final = deduped[:limit]
 
-    now = datetime.now()
-    result_ids = {r.id for r in final}
+    hit_memories = [m for m in memories if m.id in {r.id for r in final}]
     with transaction():
-        for m in memories:
-            if m.id in result_ids:
-                update_memory(
-                    replace(
-                        m,
-                        last_accessed_at=now,
-                        access_count=m.access_count + 1,
-                    )
-                )
+        touch_memories(hit_memories)
 
     return final

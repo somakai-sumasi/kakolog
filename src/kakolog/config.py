@@ -6,6 +6,8 @@ from pathlib import Path
 
 CONFIG_PATH = Path.home() / ".kakolog" / "config.json"
 
+SIMILARITY_THRESHOLD = 0.96
+
 
 def _load() -> dict:
     if not CONFIG_PATH.exists():

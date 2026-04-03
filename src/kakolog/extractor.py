@@ -1,6 +1,10 @@
-"""Claude会話フォーマットからのQ&Aペア抽出。"""
+"""Claude会話フォーマットからのQ&Aペア抽出とセッションメタ解析。"""
+
+from dataclasses import dataclass
+from datetime import datetime
 
 from .models import ConversationPair
+from .transcript import iter_jsonl
 
 
 def extract_text(content: str | list) -> str:
@@ -31,7 +35,7 @@ def extract_conversations(messages: list[dict]) -> list[ConversationPair]:
     """
     pairs = []
     current_user = None
-    current_timestamp: str | None = None
+    current_timestamp: datetime | None = None
     current_answer_parts: list[str] = []
 
     for entry in messages:
@@ -57,7 +61,12 @@ def extract_conversations(messages: list[dict]) -> list[ConversationPair]:
                     )
                 )
             current_user = text if text else None
-            current_timestamp = entry.get("timestamp")
+            raw_ts = entry.get("timestamp")
+            current_timestamp = (
+                datetime.fromisoformat(raw_ts.replace("Z", "+00:00"))
+                if raw_ts
+                else None
+            )
             current_answer_parts = []
         elif role == "assistant" and current_user:
             if text:
@@ -73,3 +82,36 @@ def extract_conversations(messages: list[dict]) -> list[ConversationPair]:
         )
 
     return pairs
+
+
+@dataclass(frozen=True)
+class SessionMeta:
+    cwd: str | None
+    entrypoint: str | None
+    first_timestamp: datetime | None
+
+
+def read_session_meta(transcript_path: str) -> SessionMeta:
+    """JSONLからcwd・entrypoint・first_timestampを抽出する。"""
+    cwd = None
+    entrypoint = None
+    first_timestamp = None
+    try:
+        for entry in iter_jsonl(transcript_path):
+            if first_timestamp is None and entry.get("timestamp"):
+                first_timestamp = datetime.fromisoformat(
+                    entry["timestamp"].replace("Z", "+00:00")
+                )
+            if cwd is None and entry.get("cwd"):
+                cwd = entry["cwd"]
+            if entrypoint is None and entry.get("entrypoint"):
+                entrypoint = entry["entrypoint"]
+            if (
+                cwd is not None
+                and entrypoint is not None
+                and first_timestamp is not None
+            ):
+                break
+    except (OSError, ValueError, KeyError):
+        pass
+    return SessionMeta(cwd=cwd, entrypoint=entrypoint, first_timestamp=first_timestamp)
