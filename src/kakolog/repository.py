@@ -35,6 +35,7 @@ def update_memory(memory: Memory) -> None:
         "     agent_turn = ?,"
         "     content = ?,"
         "     last_accessed_at = ?,"
+        "     access_count = ?,"
         "     project_path = ?"
         " WHERE id = ?",
         [
@@ -42,6 +43,7 @@ def update_memory(memory: Memory) -> None:
             memory.agent_turn,
             memory.content,
             memory.last_accessed_at.isoformat(),
+            memory.access_count,
             memory.project_path,
             memory.id,
         ],

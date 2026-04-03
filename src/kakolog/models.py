@@ -23,6 +23,7 @@ class Memory:
     content: str
     created_at: datetime
     last_accessed_at: datetime
+    access_count: int
     project_path: str | None
 
 
@@ -37,6 +38,7 @@ class SearchResult:
     score: float
     created_at: datetime
     last_accessed_at: datetime
+    access_count: int
     project_path: str | None
 
     @classmethod
@@ -49,6 +51,7 @@ class SearchResult:
             score=score,
             created_at=m.created_at,
             last_accessed_at=m.last_accessed_at,
+            access_count=m.access_count,
             project_path=m.project_path,
         )
 
@@ -61,6 +64,7 @@ class SearchResult:
             score=score,
             created_at=self.created_at,
             last_accessed_at=self.last_accessed_at,
+            access_count=self.access_count,
             project_path=self.project_path,
         )
 
@@ -72,5 +76,6 @@ class SearchResult:
             "score": self.score,
             "created_at": self.created_at.isoformat(),
             "last_accessed_at": self.last_accessed_at.isoformat(),
+            "access_count": self.access_count,
             "project_path": self.project_path,
         }

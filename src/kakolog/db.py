@@ -71,7 +71,8 @@ def _init_db(conn: sqlite3.Connection) -> None:
             content TEXT NOT NULL,
             project_path TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            access_count INTEGER DEFAULT 0
         );
 
         CREATE VIRTUAL TABLE IF NOT EXISTS fts_memories USING fts5(

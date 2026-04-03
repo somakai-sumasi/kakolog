@@ -7,11 +7,15 @@ import numpy as np
 
 from .embedder import embed_query
 from .models import SearchResult
+from dataclasses import replace
+
+from .db import transaction
 from .repository import (
     fetch_embeddings_by_ids,
     fetch_memories_by_ids,
     search_fts,
     search_vec,
+    update_memory,
 )
 from .reranker import RerankCandidate, rerank
 
@@ -173,6 +177,21 @@ def search(
     if use_mmr:
         mmr_ids = [r.id for r in deduped[:RERANK_TOP]]
         embeddings = fetch_embeddings_by_ids(mmr_ids)
-        return mmr_select(deduped[:RERANK_TOP], embeddings, limit)
+        final = mmr_select(deduped[:RERANK_TOP], embeddings, limit)
+    else:
+        final = deduped[:limit]
 
-    return deduped[:limit]
+    now = datetime.now()
+    result_ids = {r.id for r in final}
+    with transaction():
+        for m in memories:
+            if m.id in result_ids:
+                update_memory(
+                    replace(
+                        m,
+                        last_accessed_at=now,
+                        access_count=m.access_count + 1,
+                    )
+                )
+
+    return final

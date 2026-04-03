@@ -57,6 +57,7 @@ class TestMmrSelect:
             score=score,
             created_at=datetime.now(),
             last_accessed_at=datetime.now(),
+            access_count=0,
             project_path=None,
         )
 
