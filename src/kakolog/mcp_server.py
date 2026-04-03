@@ -8,8 +8,8 @@ from starlette.responses import JSONResponse
 
 from .config import add_exclude_path, get_exclude_paths, remove_exclude_path
 from .repository import get_stats
-from .search import search as _search
-from .service import save_session
+from .service.save import save_session
+from .service.search import search as _search
 
 HOST = "127.0.0.1"
 PORT = 7377

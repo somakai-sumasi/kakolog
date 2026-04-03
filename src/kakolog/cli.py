@@ -3,7 +3,7 @@
 import argparse
 
 from .repository import get_stats
-from .search import search
+from .service.search import search
 
 
 def _cmd_search(args):
@@ -18,9 +18,9 @@ def _cmd_search(args):
         print("No memories found.")
         return
     for r in results:
-        print(f"[{r.id}] score={r.score:.4f} ({r.last_accessed_at.isoformat()})")
-        print(f"  U: {r.user_turn[:100]}")
-        print(f"  A: {r.agent_turn[:200]}")
+        print(f"[{r.id}] score={r.score:.4f} ({r.memory.last_accessed_at.isoformat()})")
+        print(f"  U: {r.memory.user_turn[:100]}")
+        print(f"  A: {r.memory.agent_turn[:200]}")
         print()
 
 

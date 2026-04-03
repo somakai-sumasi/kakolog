@@ -69,6 +69,7 @@ class TestUpdateMemory:
             content=existing.content,
             created_at=existing.created_at,
             last_accessed_at=datetime(2026, 1, 1),
+            access_count=existing.access_count + 1,
             project_path=existing.project_path,
         )
         update_memory(updated)

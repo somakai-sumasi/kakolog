@@ -3,6 +3,7 @@ import os
 import shutil
 import subprocess
 from dataclasses import dataclass
+from datetime import datetime
 
 import MeCab
 
@@ -35,7 +36,7 @@ class TurnChunk:
     user_turn: str
     agent_turn: str
     content: str
-    timestamp: str | None = None
+    timestamp: datetime | None = None
 
 
 SHORT_USER_THRESHOLD = 30

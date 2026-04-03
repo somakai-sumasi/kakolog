@@ -29,7 +29,7 @@ MCPサーバー（streamable-http）方式。launchdで常駐起動し、Claude 
 | DB | SQLite (FTS5 trigram + sqlite-vec) | `~/.kakolog/memory.db` |
 | 形態素解析 | MeCab (IPAdic) | チャンクフィルタリング時の重要語判定 |
 | Linter/Formatter | Ruff | `ruff check` + `ruff format` |
-| テスト | pytest + pytest-cov | 62件のユニットテスト |
+| テスト | pytest + pytest-cov | 68件のユニットテスト |
 | CI | GitHub Actions | lint + test を自動実行 |
 | Python | 3.11.11 | SQLite拡張対応ビルドが必要 |
 
@@ -38,21 +38,25 @@ MCPサーバー（streamable-http）方式。launchdで常駐起動し、Claude 
 ```
 src/kakolog/
 ├── mcp_server.py   # MCPサーバー (FastMCP, streamable-http, port 7377)
-├── service.py      # 保存ビジネスロジック (パイプライン調整+重複スキップ+保存)
-├── search.py       # ハイブリッド検索アルゴリズム (RRF → MMR → Reranking)
-├── models.py       # ドメインモデル (Memory, SearchResult, ConversationPair)
+├── service/
+│   ├── __init__.py # サービス層共通処理 (touch_memories)
+│   ├── save.py     # 保存サービス (パイプライン調整+重複スキップ+類似度チェック+保存)
+│   └── search.py   # 検索サービス (FTS5+vec → RRF → 時間減衰 → MMR → Reranking)
+├── models.py       # ドメインモデル (Memory, SearchResult, ConversationPair, Stats)
 ├── repository.py   # データ操作 (CRUD + FTS5検索 + ベクトル検索)
-├── db.py           # SQLite接続 (contextvars自動管理) ・スキーマ・トランザクション
+├── db.py           # SQLite接続 (contextvars自動管理) ・スキーマ・ネスト対応トランザクション
 ├── db_util.py      # DB↔Model変換ユーティリティ (from_row, columns_of)
 ├── reranker.py     # japanese-reranker-tiny-v2 (ONNX int8, Cross-Encoder)
 ├── chunker.py      # チャンク分割 (MeCab重要語判定+短ターン統合)
-├── extractor.py    # Claude会話フォーマットからQ&Aペア抽出
+├── extractor.py    # Claude会話フォーマットからQ&Aペア抽出 + セッションメタ解析
 ├── cleaner.py      # テキストクリーニング・ノイズ除去
-├── embedder.py     # Ruri v3-30m (CPU, 256次元)
+├── embedder.py     # Ruri v3-30m (CPU, 256次元) + cosine_similarity
 ├── transcript.py   # JSONLトランスクリプトI/O
 ├── cli.py          # 手動検索・stats用CLI
 ├── bulk_import.py  # 過去セッション一括インポート
-└── config.py       # ユーザー設定 + 除外ポリシー
+├── config.py       # ユーザー設定 + 除外ポリシー + SIMILARITY_THRESHOLD
+└── migrations/
+    └── 0001_add_access_count.sql  # access_countカラム追加
 tests/
 ├── conftest.py         # 共通フィクスチャ (in-memory DB, embedderモック等)
 ├── test_chunker.py     # チャンク分割テスト
@@ -61,7 +65,7 @@ tests/
 ├── test_embedder.py    # 埋め込みモデルモックテスト
 ├── test_repository.py  # CRUD操作、統計テスト
 ├── test_search.py      # RRF、MMR、時間減衰テスト
-└── test_service.py     # セッション保存オーケストレーションテスト
+└── test_service.py     # 保存・検索サービステスト (touch_memories, _find_similar含む)
 .github/workflows/
 └── ci.yml              # GitHub Actions (lint + test)
 hooks/
@@ -122,16 +126,19 @@ stdioで登録するとセッション起動時にポート競合して接続失
 詳細はREADME.mdを参照。概要:
 
 - **チャンク分割**: agentターン結合 → ノイズ除去 → MeCab wcost重要語判定(閾値6000) → 短ターン統合(user≤30字が連続→最大3ターンをU+A交互で1チャンクに) → 重複排除
-- **検索**: FTS5(`content`) + sqlite-vec → RRF(k=60) × 時間減衰(30日半減期) → MMR(λ=0.7) → [オプション] Reranking
+- **検索**: FTS5(`content`) + sqlite-vec → RRF(k=60) × 時間減衰(30日半減期) → MMR(λ=0.7) → [オプション] Reranking → アクセス追跡(last_accessed_at更新+access_countインクリメント)
+- **保存時重複チェック**: 完全一致(`content`+`project_path`) → ベクトル類似度チェック(同一project_path内、閾値0.96) → 類似データはinsertスキップしaccess_count/last_accessed_atを更新
 
 ## データモデル
 
-- ドメインモデル(`Memory`, `SearchResult`, `ConversationPair`)は `models.py` に集約。全て `frozen=True` の dataclass
-- `Memory.created_at` / `last_accessed_at` は `datetime` 型。DBの `TIMESTAMP` カラムは `detect_types=PARSE_DECLTYPES` + カスタムコンバータで自動変換
+- ドメインモデル(`Memory`, `SearchResult`, `ConversationPair`, `Stats`)は `models.py` に集約。全て `frozen=True` の dataclass
+- `SearchResult` は `Memory` のラッパー（`memory: Memory` + `score: float`）。`id`プロパティのみ委譲、他は`result.memory.*`でアクセス
+- タイムスタンプは全て `datetime` 型に統一（`ConversationPair.timestamp`, `SessionMeta.first_timestamp`, `MemoryToSave.last_accessed_at`含む）。DBの `TIMESTAMP` カラムは `detect_types=PARSE_DECLTYPES` + カスタムコンバータで自動変換
 - `db_util.from_row(row, ModelClass)` で汎用的にsqlite3.Row→dataclass変換。`columns_of(ModelClass)` でSELECT句を自動生成
-- DB接続は `contextvars` で暗黙管理。`get_conn()` で自動取得、書き込み時のみ `with transaction():` を使用
-- DBカラムは `user_turn`(表示用) / `agent_turn`(表示用) / `content`(embedding・FTS用全文) / `created_at` / `last_accessed_at`
+- DB接続は `contextvars` で暗黙管理。`get_conn()` で自動取得、書き込み時のみ `with transaction():` を使用。transactionはネスト対応（最外側のみcommit/rollback）
+- DBカラムは `user_turn`(表示用) / `agent_turn`(表示用) / `content`(embedding・FTS用全文) / `created_at` / `last_accessed_at` / `access_count`(検索ヒット回数)
 - `content` のフォーマットは `U: {user}\nA: {agent}` で統一（`_format_content()` で生成）。統合チャンクは `\n\n` 区切りで複数ペアを連結
+- `touch_memories()` は `service/__init__.py` に定義。トランザクション内で呼び出すこと。search/save両方から利用
 
 ## Gotchas
 

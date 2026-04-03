@@ -2,13 +2,14 @@
 
 import sqlite3
 from dataclasses import dataclass
+from datetime import datetime
 
 import numpy as np
 from sqlite_vec import serialize_float32
 
 from .db import get_conn
 from .db_util import columns_of, from_row
-from .models import Memory
+from .models import Memory, Stats
 
 
 def find_memory_by_content(
@@ -35,6 +36,7 @@ def update_memory(memory: Memory) -> None:
         "     agent_turn = ?,"
         "     content = ?,"
         "     last_accessed_at = ?,"
+        "     access_count = ?,"
         "     project_path = ?"
         " WHERE id = ?",
         [
@@ -42,6 +44,7 @@ def update_memory(memory: Memory) -> None:
             memory.agent_turn,
             memory.content,
             memory.last_accessed_at.isoformat(),
+            memory.access_count,
             memory.project_path,
             memory.id,
         ],
@@ -56,11 +59,12 @@ class MemoryToSave:
     content: str
     embedding: list[float]
     project_path: str | None = None
-    last_accessed_at: str | None = None
+    last_accessed_at: datetime | None = None
 
 
 def insert_memory(memory: MemoryToSave) -> int:
     conn = get_conn()
+    ts = memory.last_accessed_at.isoformat() if memory.last_accessed_at else None
     cursor = conn.execute(
         "INSERT INTO memories("
         "  session_id, user_turn, agent_turn,"
@@ -77,8 +81,8 @@ def insert_memory(memory: MemoryToSave) -> int:
             memory.agent_turn,
             memory.content,
             memory.project_path,
-            memory.last_accessed_at,
-            memory.last_accessed_at,
+            ts,
+            ts,
         ],
     )
     memory_id = cursor.lastrowid
@@ -90,24 +94,18 @@ def insert_memory(memory: MemoryToSave) -> int:
     return memory_id
 
 
-@dataclass(frozen=True)
-class Stats:
-    memories: int
-    sessions: int
-
-
 def get_existing_session_ids() -> set[str]:
     rows = get_conn().execute("SELECT DISTINCT session_id FROM memories").fetchall()
     return {r[0] for r in rows}
 
 
 def get_stats() -> Stats:
-    conn = get_conn()
-    memories = conn.execute("SELECT COUNT(*) FROM memories").fetchone()[0]
-    sessions = conn.execute(
-        "SELECT COUNT(DISTINCT session_id) FROM memories"
-    ).fetchone()[0]
-    return Stats(memories=memories, sessions=sessions)
+    row = (
+        get_conn()
+        .execute("SELECT COUNT(*), COUNT(DISTINCT session_id) FROM memories")
+        .fetchone()
+    )
+    return Stats(memories=row[0], sessions=row[1])
 
 
 def fetch_memories_by_ids(
