@@ -1,5 +1,7 @@
 """Claude会話フォーマットからのQ&Aペア抽出。"""
 
+from .models import ConversationPair
+
 
 def extract_text(content: str | list) -> str:
     if isinstance(content, str):
@@ -21,12 +23,11 @@ def _is_tool_result(content) -> bool:
     return False
 
 
-def extract_conversations(messages: list[dict]) -> list[tuple[str, str, str | None]]:
+def extract_conversations(messages: list[dict]) -> list[ConversationPair]:
     """user/assistantメッセージのペアを抽出する。
 
     同じuserの質問に対して複数のassistant応答がある場合
     （ツール実行を挟んで続く場合）、全テキストを結合する。
-    戻り値: (question, answer, user_timestamp)
     """
     pairs = []
     current_user = None
@@ -49,7 +50,11 @@ def extract_conversations(messages: list[dict]) -> list[tuple[str, str, str | No
         if role == "user":
             if current_user and current_answer_parts:
                 pairs.append(
-                    (current_user, "\n\n".join(current_answer_parts), current_timestamp)
+                    ConversationPair(
+                        user_turn=current_user,
+                        agent_turn="\n\n".join(current_answer_parts),
+                        timestamp=current_timestamp,
+                    )
                 )
             current_user = text if text else None
             current_timestamp = entry.get("timestamp")
@@ -60,7 +65,11 @@ def extract_conversations(messages: list[dict]) -> list[tuple[str, str, str | No
 
     if current_user and current_answer_parts:
         pairs.append(
-            (current_user, "\n\n".join(current_answer_parts), current_timestamp)
+            ConversationPair(
+                user_turn=current_user,
+                agent_turn="\n\n".join(current_answer_parts),
+                timestamp=current_timestamp,
+            )
         )
 
     return pairs

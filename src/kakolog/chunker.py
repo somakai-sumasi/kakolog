@@ -3,13 +3,11 @@ import os
 import shutil
 import subprocess
 from dataclasses import dataclass
-from pathlib import Path
 
 import MeCab
 
-from .cleaner import clean_text, is_empty_answer, is_trivial
-from .extractor import extract_conversations
-from .transcript import parse_jsonl
+from .cleaner import is_empty_answer, is_trivial
+from .models import ConversationPair
 
 
 def _find_mecabrc() -> str | None:
@@ -86,8 +84,8 @@ def _is_worth_saving(user_turn: str, agent_turn: str) -> bool:
     return True
 
 
-def _merge_short_turns(
-    pairs: list[tuple[str, str, str | None]],
+def merge_short_turns(
+    pairs: list[ConversationPair],
 ) -> list[TurnChunk]:
     """短いuser_turnが連続する場合、U+A+U+A交互のまま統合する。
 
@@ -99,35 +97,36 @@ def _merge_short_turns(
     i = 0
 
     while i < len(pairs):
-        q, a, ts = pairs[i]
-        if not _is_worth_saving(q, a):
+        p = pairs[i]
+        if not _is_worth_saving(p.user_turn, p.agent_turn):
             i += 1
             continue
 
-        if len(q) <= SHORT_USER_THRESHOLD:
-            group = [(q, a, ts)]
+        if len(p.user_turn) <= SHORT_USER_THRESHOLD:
+            group = [p]
             j = i + 1
             while (
                 j < len(pairs)
-                and len(pairs[j][0]) <= SHORT_USER_THRESHOLD
-                and _is_worth_saving(pairs[j][0], pairs[j][1])
+                and len(pairs[j].user_turn) <= SHORT_USER_THRESHOLD
+                and _is_worth_saving(pairs[j].user_turn, pairs[j].agent_turn)
                 and len(group) < MAX_MERGE_TURNS
             ):
                 group.append(pairs[j])
                 j += 1
 
             if len(group) > 1:
-                first_user = group[0][0]
-                last_agent = group[-1][1]
+                first_user = group[0].user_turn
+                last_agent = group[-1].agent_turn
                 parts = [
-                    _format_content(gq, ga[:AGENT_TRUNCATE_LEN]) for gq, ga, _ in group
+                    _format_content(g.user_turn, g.agent_turn[:AGENT_TRUNCATE_LEN])
+                    for g in group
                 ]
                 chunks.append(
                     TurnChunk(
                         user_turn=first_user,
                         agent_turn=last_agent,
                         content="\n\n".join(parts),
-                        timestamp=ts,
+                        timestamp=p.timestamp,
                     )
                 )
                 i = j
@@ -135,22 +134,12 @@ def _merge_short_turns(
 
         chunks.append(
             TurnChunk(
-                user_turn=q, agent_turn=a, content=_format_content(q, a), timestamp=ts
+                user_turn=p.user_turn,
+                agent_turn=p.agent_turn,
+                content=_format_content(p.user_turn, p.agent_turn),
+                timestamp=p.timestamp,
             )
         )
         i += 1
 
     return chunks
-
-
-def chunk_session(transcript_path: str | Path) -> list[TurnChunk]:
-    messages = parse_jsonl(transcript_path)
-    pairs = extract_conversations(messages)
-
-    cleaned = []
-    for q, a, ts in pairs:
-        q = clean_text(q)
-        a = clean_text(a)
-        cleaned.append((q, a, ts))
-
-    return _merge_short_turns(cleaned)

@@ -1,16 +1,18 @@
 """ハイブリッド検索: FTS5キーワード + vecベクトル → RRF統合 × 時間減衰 → MMR多様性"""
 
 import re
-import sqlite3
-from dataclasses import dataclass
 from datetime import datetime
 
 import numpy as np
-from sqlite_vec import serialize_float32
 
-from .db import Memory, connection
 from .embedder import embed_query
-from .repository import fetch_embeddings_by_ids, fetch_memories_by_ids
+from .models import SearchResult
+from .repository import (
+    fetch_embeddings_by_ids,
+    fetch_memories_by_ids,
+    search_fts,
+    search_vec,
+)
 from .reranker import RerankCandidate, rerank
 
 RRF_K = 60
@@ -21,60 +23,9 @@ MMR_LAMBDA = 0.7
 SECONDS_PER_DAY = 86400
 
 
-@dataclass(frozen=True)
-class SearchResult:
-    id: int
-    user_turn: str
-    agent_turn: str
-    content: str
-    score: float
-    created_at: str
-    last_accessed_at: str
-    project_path: str | None
-
-    @classmethod
-    def from_memory(cls, m: "Memory", score: float) -> "SearchResult":
-        return cls(
-            id=m.id,
-            user_turn=m.user_turn,
-            agent_turn=m.agent_turn,
-            content=m.content,
-            score=score,
-            created_at=m.created_at,
-            last_accessed_at=m.last_accessed_at,
-            project_path=m.project_path,
-        )
-
-    def with_score(self, score: float) -> "SearchResult":
-        return SearchResult(
-            id=self.id,
-            user_turn=self.user_turn,
-            agent_turn=self.agent_turn,
-            content=self.content,
-            score=score,
-            created_at=self.created_at,
-            last_accessed_at=self.last_accessed_at,
-            project_path=self.project_path,
-        )
-
-    def to_dict(self) -> dict:
-        return {
-            "user_turn": self.user_turn,
-            "agent_turn": self.agent_turn,
-            "content": self.content,
-            "score": self.score,
-            "created_at": self.created_at,
-            "last_accessed_at": self.last_accessed_at,
-            "project_path": self.project_path,
-        }
-
-
 def time_decay(
-    last_accessed_at_str: str, half_life_days: float = HALF_LIFE_DAYS
+    last_accessed_at: datetime, half_life_days: float = HALF_LIFE_DAYS
 ) -> float:
-    last_accessed_at = datetime.fromisoformat(
-        last_accessed_at_str.replace("Z", "+00:00")
-    )
     now = (
         datetime.now(last_accessed_at.tzinfo)
         if last_accessed_at.tzinfo
@@ -111,40 +62,12 @@ def _split_terms(query: str) -> list[str]:
     return [t for t in terms if len(t) >= 3]
 
 
-def search_keyword(
-    conn: sqlite3.Connection, query: str, limit: int = TOP_K
-) -> tuple[list[int], dict[int, int], int]:
-    """戻り値: (ソート済みID, {id: ヒットターム数}, 総ターム数)"""
+def _build_search_terms(query: str) -> list[str]:
+    """クエリからFTS5検索用のタームリストを構築する。"""
     terms = _split_terms(query)
     if not terms and len(query) >= 3:
         terms = [query]
-    if not terms:
-        return [], {}, 0
-
-    doc_hits: dict[int, int] = {}
-    for term in terms:
-        try:
-            rows = conn.execute(
-                "SELECT rowid FROM fts_memories WHERE fts_memories MATCH ? LIMIT ?",
-                [term, limit],
-            ).fetchall()
-            for r in rows:
-                doc_hits[r[0]] = doc_hits.get(r[0], 0) + 1
-        except sqlite3.OperationalError:
-            continue
-
-    sorted_ids = sorted(doc_hits.keys(), key=lambda x: doc_hits[x], reverse=True)
-    return sorted_ids[:limit], doc_hits, len(terms)
-
-
-def search_vector(
-    conn: sqlite3.Connection, query_embedding: list[float], limit: int = TOP_K
-) -> list[int]:
-    rows = conn.execute(
-        "SELECT memory_id FROM vec_memories WHERE embedding MATCH ? AND k = ?",
-        [serialize_float32(query_embedding), limit],
-    ).fetchall()
-    return [r[0] for r in rows]
+    return terms
 
 
 def mmr_select(
@@ -217,38 +140,39 @@ def search(
     use_mmr: bool = False,
 ) -> list[SearchResult]:
     query_embedding = embed_query(query)
+    terms = _build_search_terms(query)
 
-    with connection() as conn:
-        keyword_ids, keyword_term_hits, total_terms = search_keyword(conn, query)
-        vector_ids = search_vector(conn, query_embedding)
+    keyword_ids, keyword_term_hits = search_fts(terms) if terms else ([], {})
+    vector_ids = search_vec(query_embedding)
 
-        rrf_scores = rrf_fuse(keyword_ids, vector_ids, keyword_term_hits, total_terms)
-        if not rrf_scores:
-            return []
+    rrf_scores = rrf_fuse(keyword_ids, vector_ids, keyword_term_hits, len(terms))
+    if not rrf_scores:
+        return []
 
-        all_ids = list(rrf_scores.keys())
-        memories = fetch_memories_by_ids(conn, all_ids, project_path)
+    all_ids = list(rrf_scores.keys())
+    memories = fetch_memories_by_ids(all_ids, project_path)
 
-        results = [
-            SearchResult.from_memory(
-                m, score=rrf_scores.get(m.id, 0.0) * time_decay(m.last_accessed_at)
-            )
-            for m in memories
+    results = [
+        SearchResult.from_memory(
+            m,
+            score=rrf_scores.get(m.id, 0.0) * time_decay(m.last_accessed_at),
+        )
+        for m in memories
+    ]
+
+    results.sort(key=lambda r: r.score, reverse=True)
+    deduped = _deduplicate(results)
+
+    if use_rerank:
+        candidates = [
+            RerankCandidate(text=r.content, source=r) for r in deduped[:RERANK_TOP]
         ]
+        reranked = rerank(query, candidates, top_k=limit)
+        deduped = [c.source.with_score(c.rerank_score) for c in reranked]
 
-        results.sort(key=lambda r: r.score, reverse=True)
-        deduped = _deduplicate(results)
-
-        if use_rerank:
-            candidates = [
-                RerankCandidate(text=r.content, source=r) for r in deduped[:RERANK_TOP]
-            ]
-            reranked = rerank(query, candidates, top_k=limit)
-            deduped = [c.source.with_score(c.rerank_score) for c in reranked]
-
-        if use_mmr:
-            mmr_ids = [r.id for r in deduped[:RERANK_TOP]]
-            embeddings = fetch_embeddings_by_ids(conn, mmr_ids)
-            return mmr_select(deduped[:RERANK_TOP], embeddings, limit)
+    if use_mmr:
+        mmr_ids = [r.id for r in deduped[:RERANK_TOP]]
+        embeddings = fetch_embeddings_by_ids(mmr_ids)
+        return mmr_select(deduped[:RERANK_TOP], embeddings, limit)
 
     return deduped[:limit]

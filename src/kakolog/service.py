@@ -1,24 +1,31 @@
-"""保存・検索のビジネスロジック。server.pyから分離。"""
+"""保存のビジネスロジック。"""
 
 from pathlib import Path
 
-from .chunker import chunk_session
-from .config import is_excluded
-from .db import connection
+from .chunker import TurnChunk, merge_short_turns
+from .cleaner import clean_text
+from .config import is_excluded, is_excluded_session
+from .db import transaction
 from .embedder import embed_documents
+from .extractor import extract_conversations
+from .models import ConversationPair
 from .repository import MemoryToSave, find_memory_by_content, insert_memory
-from .transcript import read_session_meta
-
-_EXCLUDED_ENTRYPOINTS = frozenset({"sdk-cli"})
-_EXCLUDED_PATH_PARTS = frozenset({"subagents"})
+from .transcript import parse_jsonl, read_session_meta
 
 
-def is_excluded_session(transcript_path: str, entrypoint: str | None) -> bool:
-    if any(part in _EXCLUDED_PATH_PARTS for part in Path(transcript_path).parts):
-        return True
-    if entrypoint in _EXCLUDED_ENTRYPOINTS:
-        return True
-    return False
+def _build_chunks(transcript_path: str | Path) -> list[TurnChunk]:
+    """JSONL → 会話抽出 → クリーニング → チャンク分割。"""
+    messages = parse_jsonl(transcript_path)
+    pairs = extract_conversations(messages)
+    cleaned = [
+        ConversationPair(
+            user_turn=clean_text(p.user_turn),
+            agent_turn=clean_text(p.agent_turn),
+            timestamp=p.timestamp,
+        )
+        for p in pairs
+    ]
+    return merge_short_turns(cleaned)
 
 
 def save_session(
@@ -30,24 +37,21 @@ def save_session(
     resolved_project_path = project_path if project_path is not None else meta.cwd
     if is_excluded(resolved_project_path):
         return 0
-    chunks = chunk_session(transcript_path)
+    chunks = _build_chunks(transcript_path)
     if not chunks:
         return 0
 
     texts = [c.content for c in chunks]
     embeddings = embed_documents(texts)
 
-    with connection() as conn:
+    with transaction():
         count = 0
         for chunk, emb in zip(chunks, embeddings):
             ts = chunk.timestamp or meta.first_timestamp
-            existing = find_memory_by_content(
-                conn, chunk.content, resolved_project_path
-            )
+            existing = find_memory_by_content(chunk.content, resolved_project_path)
             if existing:
                 continue
             insert_memory(
-                conn,
                 MemoryToSave(
                     session_id=session_id,
                     user_turn=chunk.user_turn,

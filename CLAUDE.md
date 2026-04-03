@@ -38,16 +38,21 @@ MCPサーバー（streamable-http）方式。launchdで常駐起動し、Claude 
 ```
 src/kakolog/
 ├── mcp_server.py   # MCPサーバー (FastMCP, streamable-http, port 7377)
-├── service.py      # 保存ビジネスロジック (重複スキップ+保存オーケストレーション)
-├── search.py       # ハイブリッド検索 (FTS5 + vec → RRF → MMR → Reranking)
+├── service.py      # 保存ビジネスロジック (パイプライン調整+重複スキップ+保存)
+├── search.py       # ハイブリッド検索アルゴリズム (RRF → MMR → Reranking)
+├── models.py       # ドメインモデル (Memory, SearchResult, ConversationPair)
+├── repository.py   # データ操作 (CRUD + FTS5検索 + ベクトル検索)
+├── db.py           # SQLite接続 (contextvars自動管理) ・スキーマ・トランザクション
+├── db_util.py      # DB↔Model変換ユーティリティ (from_row, columns_of)
 ├── reranker.py     # japanese-reranker-tiny-v2 (ONNX int8, Cross-Encoder)
-├── repository.py   # メモリのデータ操作 (挿入・検索・統計)
-├── db.py           # SQLite接続 (Context Manager) ・スキーマ管理
-├── chunker.py      # JSONL→TurnChunk分割 (ノイズフィルタ+MeCab重要語判定+短ターン統合)
+├── chunker.py      # チャンク分割 (MeCab重要語判定+短ターン統合)
+├── extractor.py    # Claude会話フォーマットからQ&Aペア抽出
+├── cleaner.py      # テキストクリーニング・ノイズ除去
 ├── embedder.py     # Ruri v3-30m (CPU, 256次元)
+├── transcript.py   # JSONLトランスクリプトI/O
 ├── cli.py          # 手動検索・stats用CLI
 ├── bulk_import.py  # 過去セッション一括インポート
-└── config.py       # ユーザー設定 (~/.kakolog/config.json, 除外パス管理)
+└── config.py       # ユーザー設定 + 除外ポリシー
 tests/
 ├── conftest.py         # 共通フィクスチャ (in-memory DB, embedderモック等)
 ├── test_chunker.py     # チャンク分割テスト
@@ -121,9 +126,10 @@ stdioで登録するとセッション起動時にポート競合して接続失
 
 ## データモデル
 
-- `Memory`, `Stats`, `SearchResult` は全て `frozen=True` の dataclass
-- `Memory.from_row(row)` でsqlite3.Row→Memory変換を集約。`SearchResult.from_memory(m, score)` でMemory→SearchResult変換を集約
-- `init_db()` は `connection.__enter__` に統合済み。個別呼び出し不要
+- ドメインモデル(`Memory`, `SearchResult`, `ConversationPair`)は `models.py` に集約。全て `frozen=True` の dataclass
+- `Memory.created_at` / `last_accessed_at` は `datetime` 型。DBの `TIMESTAMP` カラムは `detect_types=PARSE_DECLTYPES` + カスタムコンバータで自動変換
+- `db_util.from_row(row, ModelClass)` で汎用的にsqlite3.Row→dataclass変換。`columns_of(ModelClass)` でSELECT句を自動生成
+- DB接続は `contextvars` で暗黙管理。`get_conn()` で自動取得、書き込み時のみ `with transaction():` を使用
 - DBカラムは `user_turn`(表示用) / `agent_turn`(表示用) / `content`(embedding・FTS用全文) / `created_at` / `last_accessed_at`
 - `content` のフォーマットは `U: {user}\nA: {agent}` で統一（`_format_content()` で生成）。統合チャンクは `\n\n` 区切りで複数ペアを連結
 

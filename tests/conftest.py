@@ -5,19 +5,22 @@ import numpy as np
 import pytest
 import sqlite_vec
 
-from kakolog.db import EMBEDDING_DIM, _init_db
+from kakolog.db import EMBEDDING_DIM, _current_conn, _init_db
 
 
 @pytest.fixture()
 def db_conn():
-    """in-memory SQLite + sqlite-vec 拡張付き接続"""
-    conn = sqlite3.connect(":memory:")
+    """in-memory SQLite + sqlite-vec 拡張付き接続。
+    _current_conn にセットするのでrepository関数がそのまま動く。"""
+    conn = sqlite3.connect(":memory:", detect_types=sqlite3.PARSE_DECLTYPES)
     conn.row_factory = sqlite3.Row
     conn.enable_load_extension(True)
     sqlite_vec.load(conn)
     conn.enable_load_extension(False)
     _init_db(conn)
+    token = _current_conn.set(conn)
     yield conn
+    _current_conn.reset(token)
     conn.close()
 
 

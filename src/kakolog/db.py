@@ -1,5 +1,6 @@
 import sqlite3
-from dataclasses import dataclass
+from contextvars import ContextVar
+from datetime import datetime
 from pathlib import Path
 
 import sqlite_vec
@@ -8,52 +9,48 @@ DEFAULT_DB_PATH = Path.home() / ".kakolog" / "memory.db"
 EMBEDDING_DIM = 256
 
 
-_MEMORY_COLUMNS = (
-    "id, user_turn, agent_turn, content, created_at, last_accessed_at, project_path"
-)
+def _parse_timestamp(val: bytes) -> datetime:
+    """TIMESTAMP型カラムのカスタムコンバータ。"Z"付きISO8601にも対応。"""
+    s = val.decode()
+    return datetime.fromisoformat(s.replace("Z", "+00:00"))
 
 
-@dataclass(frozen=True)
-class Memory:
-    """記憶のドメインモデル。DBから取得した1件の記憶を表す。"""
+sqlite3.register_converter("TIMESTAMP", _parse_timestamp)
 
-    id: int
-    user_turn: str
-    agent_turn: str
-    content: str
-    created_at: str
-    last_accessed_at: str
-    project_path: str | None
-
-    @classmethod
-    def from_row(cls, row: sqlite3.Row) -> "Memory":
-        return cls(
-            id=row["id"],
-            user_turn=row["user_turn"],
-            agent_turn=row["agent_turn"],
-            content=row["content"],
-            created_at=row["created_at"],
-            last_accessed_at=row["last_accessed_at"],
-            project_path=row["project_path"],
-        )
+_current_conn: ContextVar[sqlite3.Connection] = ContextVar("_current_conn")
 
 
-class connection:
-    """DB接続のContext Manager。with文で使用する。init_dbも自動実行。"""
+def _open_conn(db_path: Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
+    """DB接続を作成し、拡張ロード+スキーマ初期化を行う。"""
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_path), detect_types=sqlite3.PARSE_DECLTYPES)
+    conn.row_factory = sqlite3.Row
+    conn.enable_load_extension(True)
+    sqlite_vec.load(conn)
+    conn.enable_load_extension(False)
+    _init_db(conn)
+    return conn
 
-    def __init__(self, db_path: Path = DEFAULT_DB_PATH):
-        self.db_path = db_path
+
+def get_conn() -> sqlite3.Connection:
+    """現在のDB接続を取得する。未接続なら自動で作成する。"""
+    try:
+        return _current_conn.get()
+    except LookupError:
+        conn = _open_conn()
+        _current_conn.set(conn)
+        return conn
+
+
+class transaction:
+    """書き込みトランザクション用のContext Manager。
+    正常終了でcommit、例外発生でrollback。"""
+
+    def __init__(self):
         self.conn: sqlite3.Connection | None = None
 
-    def __enter__(self) -> sqlite3.Connection:
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(str(self.db_path))
-        self.conn.row_factory = sqlite3.Row
-        self.conn.enable_load_extension(True)
-        sqlite_vec.load(self.conn)
-        self.conn.enable_load_extension(False)
-        _init_db(self.conn)
-        return self.conn
+    def __enter__(self) -> None:
+        self.conn = get_conn()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.conn:
@@ -61,7 +58,6 @@ class connection:
                 self.conn.commit()
             else:
                 self.conn.rollback()
-            self.conn.close()
         return False
 
 
