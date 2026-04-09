@@ -92,9 +92,7 @@ class TestFetch:
     def test_fetch_with_project_filter(self, db_conn):
         id1 = insert_memory(_make_memory("s1", "U1", "A1", project_path="/proj"))
         id2 = insert_memory(_make_memory("s1", "U2", "A2", project_path="/other"))
-        memories = fetch_memories_by_ids(
-            [id1, id2], SearchScope(project_path="/proj")
-        )
+        memories = fetch_memories_by_ids([id1, id2], SearchScope(project_path="/proj"))
         assert len(memories) == 1
         assert memories[0].project_path == "/proj"
 
