@@ -3,7 +3,7 @@ from datetime import datetime
 import numpy as np
 
 from kakolog.db import EMBEDDING_DIM
-from kakolog.models import Memory
+from kakolog.models import Memory, SearchScope
 from kakolog.repository import (
     MemoryToSave,
     fetch_embeddings_by_ids,
@@ -64,6 +64,7 @@ class TestUpdateMemory:
         existing = find_memory_by_content("U: U\nA: A")
         updated = Memory(
             id=existing.id,
+            session_id=existing.session_id,
             user_turn=existing.user_turn,
             agent_turn=existing.agent_turn,
             content=existing.content,
@@ -91,9 +92,18 @@ class TestFetch:
     def test_fetch_with_project_filter(self, db_conn):
         id1 = insert_memory(_make_memory("s1", "U1", "A1", project_path="/proj"))
         id2 = insert_memory(_make_memory("s1", "U2", "A2", project_path="/other"))
-        memories = fetch_memories_by_ids([id1, id2], project_path="/proj")
+        memories = fetch_memories_by_ids(
+            [id1, id2], SearchScope(project_path="/proj")
+        )
         assert len(memories) == 1
         assert memories[0].project_path == "/proj"
+
+    def test_fetch_with_session_filter(self, db_conn):
+        id1 = insert_memory(_make_memory("s1", "U1", "A1"))
+        id2 = insert_memory(_make_memory("s2", "U2", "A2"))
+        memories = fetch_memories_by_ids([id1, id2], SearchScope(session_id="s1"))
+        assert len(memories) == 1
+        assert memories[0].session_id == "s1"
 
     def test_fetch_embeddings(self, db_conn):
         mid = insert_memory(_make_memory())

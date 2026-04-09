@@ -7,7 +7,7 @@ import numpy as np
 
 from ..db import transaction
 from ..embedder import cosine_similarity, embed_query
-from ..models import SearchResult
+from ..models import SearchResult, SearchScope
 from ..repository import (
     fetch_embeddings_by_ids,
     fetch_memories_by_ids,
@@ -130,7 +130,7 @@ def _deduplicate(results: list[SearchResult]) -> list[SearchResult]:
 def search(
     query: str,
     limit: int = 10,
-    project_path: str | None = None,
+    scope: SearchScope | None = None,
     use_rerank: bool = False,
     use_mmr: bool = False,
 ) -> list[SearchResult]:
@@ -145,7 +145,7 @@ def search(
         return []
 
     all_ids = list(rrf_scores.keys())
-    memories = fetch_memories_by_ids(all_ids, project_path)
+    memories = fetch_memories_by_ids(all_ids, scope)
 
     results = [
         SearchResult.from_memory(

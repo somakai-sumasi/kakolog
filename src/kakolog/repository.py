@@ -9,7 +9,7 @@ from sqlite_vec import serialize_float32
 
 from .db import get_conn
 from .db_util import columns_of, from_row
-from .models import Memory, Stats
+from .models import Memory, SearchScope, Stats
 
 
 def find_memory_by_content(
@@ -110,9 +110,9 @@ def get_stats() -> Stats:
 
 def fetch_memories_by_ids(
     ids: list[int],
-    project_path: str | None = None,
+    scope: SearchScope | None = None,
 ) -> list[Memory]:
-    """指定IDのメモリをDBから取得。project_path指定時はフィルタリング。"""
+    """指定IDのメモリをDBから取得。scope指定時はフィルタリング。"""
     if not ids:
         return []
     conn = get_conn()
@@ -121,9 +121,13 @@ def fetch_memories_by_ids(
         f"SELECT {columns_of(Memory)} FROM memories WHERE id IN ({placeholders})"
     )
     params: list = list(ids)
-    if project_path:
-        query_sql += " AND project_path = ?"
-        params.append(project_path)
+    if scope is not None:
+        if scope.project_path is not None:
+            query_sql += " AND project_path = ?"
+            params.append(scope.project_path)
+        if scope.session_id is not None:
+            query_sql += " AND session_id = ?"
+            params.append(scope.session_id)
     rows = conn.execute(query_sql, params).fetchall()
     return [from_row(row, Memory) for row in rows]
 

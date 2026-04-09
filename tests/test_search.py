@@ -51,6 +51,7 @@ class TestMmrSelect:
     def _make_result(self, id: int, score: float) -> SearchResult:
         m = Memory(
             id=id,
+            session_id="sess1",
             user_turn=f"U{id}",
             agent_turn=f"A{id}",
             content=f"U: U{id}\nA: A{id}",
