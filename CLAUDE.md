@@ -29,7 +29,7 @@ MCPサーバー（streamable-http）方式。launchdで常駐起動し、Claude 
 | DB | SQLite (FTS5 trigram + sqlite-vec) | `~/.kakolog/memory.db` |
 | 形態素解析 | MeCab (IPAdic) | チャンクフィルタリング時の重要語判定 |
 | Linter/Formatter | Ruff | `ruff check` + `ruff format` |
-| テスト | pytest + pytest-cov | 68件のユニットテスト |
+| テスト | pytest + pytest-cov | 69件のユニットテスト |
 | CI | GitHub Actions | lint + test を自動実行 |
 | Python | 3.11.11 | SQLite拡張対応ビルドが必要 |
 
@@ -42,7 +42,7 @@ src/kakolog/
 │   ├── __init__.py # サービス層共通処理 (touch_memories)
 │   ├── save.py     # 保存サービス (パイプライン調整+重複スキップ+類似度チェック+保存)
 │   └── search.py   # 検索サービス (FTS5+vec → RRF → 時間減衰 → MMR → Reranking)
-├── models.py       # ドメインモデル (Memory, SearchResult, ConversationPair, Stats)
+├── models.py       # ドメインモデル (Memory, SearchResult, SearchScope, ConversationPair, Stats)
 ├── repository.py   # データ操作 (CRUD + FTS5検索 + ベクトル検索)
 ├── db.py           # SQLite接続 (contextvars自動管理) ・スキーマ・ネスト対応トランザクション
 ├── db_util.py      # DB↔Model変換ユーティリティ (from_row, columns_of)
@@ -126,17 +126,18 @@ stdioで登録するとセッション起動時にポート競合して接続失
 詳細はREADME.mdを参照。概要:
 
 - **チャンク分割**: agentターン結合 → ノイズ除去 → MeCab wcost重要語判定(閾値6000) → 短ターン統合(user≤30字が連続→最大3ターンをU+A交互で1チャンクに) → 重複排除
-- **検索**: FTS5(`content`) + sqlite-vec → RRF(k=60) × 時間減衰(30日半減期) → MMR(λ=0.7) → [オプション] Reranking → アクセス追跡(last_accessed_at更新+access_countインクリメント)
+- **検索**: FTS5(`content`) + sqlite-vec → RRF(k=60) × 時間減衰(30日半減期) → SearchScopeフィルタ(project_path/session_id) → MMR(λ=0.7) → [オプション] Reranking → アクセス追跡(last_accessed_at更新+access_countインクリメント)
 - **保存時重複チェック**: 完全一致(`content`+`project_path`) → ベクトル類似度チェック(同一project_path内、閾値0.96) → 類似データはinsertスキップしaccess_count/last_accessed_atを更新
 
 ## データモデル
 
-- ドメインモデル(`Memory`, `SearchResult`, `ConversationPair`, `Stats`)は `models.py` に集約。全て `frozen=True` の dataclass
+- ドメインモデル(`Memory`, `SearchResult`, `SearchScope`, `ConversationPair`, `Stats`)は `models.py` に集約。全て `frozen=True` の dataclass
+- `SearchScope` は検索フィルタのValue Object（`project_path`, `session_id`）。`SearchScope.of()` ファクトリで全フィールドNoneならNoneを返す。MCP→Service→Repositoryの3層を `scope: SearchScope | None` で統一
 - `SearchResult` は `Memory` のラッパー（`memory: Memory` + `score: float`）。`id`プロパティのみ委譲、他は`result.memory.*`でアクセス
 - タイムスタンプは全て `datetime` 型に統一（`ConversationPair.timestamp`, `SessionMeta.first_timestamp`, `MemoryToSave.last_accessed_at`含む）。DBの `TIMESTAMP` カラムは `detect_types=PARSE_DECLTYPES` + カスタムコンバータで自動変換
 - `db_util.from_row(row, ModelClass)` で汎用的にsqlite3.Row→dataclass変換。`columns_of(ModelClass)` でSELECT句を自動生成
 - DB接続は `contextvars` で暗黙管理。`get_conn()` で自動取得、書き込み時のみ `with transaction():` を使用。transactionはネスト対応（最外側のみcommit/rollback）
-- DBカラムは `user_turn`(表示用) / `agent_turn`(表示用) / `content`(embedding・FTS用全文) / `created_at` / `last_accessed_at` / `access_count`(検索ヒット回数)
+- DBカラムは `session_id` / `user_turn`(表示用) / `agent_turn`(表示用) / `content`(embedding・FTS用全文) / `created_at` / `last_accessed_at` / `access_count`(検索ヒット回数)
 - `content` のフォーマットは `U: {user}\nA: {agent}` で統一（`_format_content()` で生成）。統合チャンクは `\n\n` 区切りで複数ペアを連結
 - `touch_memories()` は `service/__init__.py` に定義。トランザクション内で呼び出すこと。search/save両方から利用
 

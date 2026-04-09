@@ -18,6 +18,7 @@ class Memory:
     """DBから取得した1件の記憶。"""
 
     id: int
+    session_id: str
     user_turn: str
     agent_turn: str
     content: str
@@ -48,6 +49,7 @@ class SearchResult:
     def to_dict(self) -> dict:
         m = self.memory
         return {
+            "session_id": m.session_id,
             "user_turn": m.user_turn,
             "agent_turn": m.agent_turn,
             "content": m.content,
@@ -57,6 +59,25 @@ class SearchResult:
             "access_count": m.access_count,
             "project_path": m.project_path,
         }
+
+
+@dataclass(frozen=True)
+class SearchScope:
+    """検索スコープ。指定されたフィルタ軸でメモリを絞り込む。"""
+
+    project_path: str | None = None
+    session_id: str | None = None
+
+    @classmethod
+    def of(
+        cls,
+        project_path: str | None = None,
+        session_id: str | None = None,
+    ) -> "SearchScope | None":
+        """全フィールドNoneならNoneを返し、それ以外はSearchScopeを返す。"""
+        if project_path is None and session_id is None:
+            return None
+        return cls(project_path=project_path, session_id=session_id)
 
 
 @dataclass(frozen=True)

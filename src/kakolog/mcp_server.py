@@ -7,6 +7,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from .config import add_exclude_path, get_exclude_paths, remove_exclude_path
+from .models import SearchScope
 from .repository import get_stats
 from .service.save import save_session
 from .service.search import search as _search
@@ -19,11 +20,23 @@ mcp = FastMCP("kakolog", host=HOST, port=PORT)
 
 @mcp.tool()
 def search(
-    query: str, limit: int = 10, use_rerank: bool = False, use_mmr: bool = True
+    query: str,
+    limit: int = 10,
+    project_path: str | None = None,
+    session_id: str | None = None,
+    use_rerank: bool = False,
+    use_mmr: bool = True,
 ) -> list[dict]:
     """過去のClaude Codeセッション会話を検索する。
     具体的な語を含む自然言語クエリが効果的（例: 「FTS5でどう全文検索を実装したか」）。"""
-    results = _search(query, limit=limit, use_rerank=use_rerank, use_mmr=use_mmr)
+    scope = SearchScope.of(project_path=project_path, session_id=session_id)
+    results = _search(
+        query,
+        limit=limit,
+        scope=scope,
+        use_rerank=use_rerank,
+        use_mmr=use_mmr,
+    )
     return [r.to_dict() for r in results]
 
 

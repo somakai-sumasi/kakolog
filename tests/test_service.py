@@ -150,6 +150,7 @@ class TestSaveSession:
 
         similar_memory = Memory(
             id=99,
+            session_id="sess1",
             user_turn="U1",
             agent_turn="A1",
             content="U: U1\nA: A1",

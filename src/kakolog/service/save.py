@@ -8,7 +8,7 @@ from ..config import SIMILARITY_THRESHOLD, is_excluded, is_excluded_session
 from ..db import transaction
 from ..embedder import cosine_similarity, embed_documents
 from ..extractor import extract_conversations, read_session_meta
-from ..models import ConversationPair, Memory
+from ..models import ConversationPair, Memory, SearchScope
 from ..repository import (
     MemoryToSave,
     fetch_embeddings_by_ids,
@@ -87,7 +87,8 @@ def _find_similar(
     candidate_ids = search_vec(embedding, limit=5)
     if not candidate_ids:
         return None
-    memories = fetch_memories_by_ids(candidate_ids, project_path)
+    scope = SearchScope.of(project_path=project_path)
+    memories = fetch_memories_by_ids(candidate_ids, scope)
     if not memories:
         return None
     emb_map = fetch_embeddings_by_ids([m.id for m in memories])
