@@ -6,3 +6,4 @@ dist/
 build/
 test_memory.db
 *.sarif
+.claude/settings.local.json
